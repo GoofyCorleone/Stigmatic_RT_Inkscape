@@ -237,13 +237,13 @@ def generar_cartesiana(out_path, traced=False):
 def generar_lsoe_divergente(out_path, traced=False):
     """LSOE divergente: imagen virtual en el mismo semiespacio que el objeto.
 
-    Objeto real en d_0 = −80 mm, imagen virtual en d_2 = −250 mm.  Los
-    rayos divergen tras la lente como si procediesen de un foco virtual
-    a z = −250 mm.
+    Objeto real en d_0 = −100 mm, imagen virtual en d_2 = −40 mm (entre
+    el objeto y la lente).  Los rayos divergen tras la lente como si
+    procediesen del foco virtual a z = −40 mm.
     """
     N0, N1, N2 = 1.0, 1.6, 1.0
-    Z0, Z1     = 0.0, 10.0
-    D0, D2     = -80.0, -250.0     # imagen virtual en el mismo lado que el objeto
+    Z0, Z1     = 0.0, 5.0
+    D0, D2     = -100.0, -40.0     # imagen virtual entre objeto y lente
     SIGMA      = 0.0
     ZREF       = Z0
 
@@ -269,7 +269,8 @@ def generar_lsoe_divergente(out_path, traced=False):
 
     # encuadre — incluimos el foco virtual a la izquierda y espacio a la
     # derecha para mostrar los rayos divergentes
-    xmin = xc(D2 - MARGEN * 0.5, ZREF);  xmax = xc(Z1 + MARGEN * 2.0, ZREF)
+    z_lo = min(D0, D2, float(np.min(z0)))
+    xmin = xc(z_lo - MARGEN * 0.5, ZREF);  xmax = xc(Z1 + MARGEN * 2.0, ZREF)
     ymin = yc(r_ap) - px(MARGEN * 0.8);  ymax = px(r_ap) + px(MARGEN * 0.8)
 
     out  = svg_header(xmin, xmax, ymin, ymax)
@@ -336,9 +337,9 @@ def generar_cartesiana_divergente(out_path, traced=False):
     Vidrio → aire con objeto virtual a la derecha del vértice produce una
     superficie cartesiana cóncava (imagen virtual).
     """
-    N1, N2 = 1.5, 1.0              # vidrio → aire
+    N1, N2 = 1.0, 1.5              # aire → vidrio, superficie cóncava
     Z      = 0.0
-    D0, D1 = -100.0, -250.0         # ambos en el mismo lado → imagen virtual
+    D0, D1 = -100.0, -40.0          # imagen virtual entre objeto y superficie
     ZREF   = Z
 
     zs, rs = perfil_ovoide_descartes(N1, N2, Z, D0, D1, N=400)

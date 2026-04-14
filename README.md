@@ -48,9 +48,11 @@ A single Cartesian-oval refracting surface (n₁=1, n₂=1.5, object at −100 m
 
 ### Divergent configurations
 
-Both elements also produce rigorously stigmatic **virtual** images. A divergent LSOE (σ=0,
-object at `d₀ = −100 mm`, virtual image at `d₂ = −250 mm`) and a divergent Cartesian surface
-(n₁=1.5, n₂=1.0, object at −100 mm, virtual image at −250 mm):
+Both elements also produce rigorously stigmatic **virtual** images. A biconcave divergent
+LSOE (σ=0, object at `d₀ = −100 mm`, virtual image at `d₂ = −40 mm`) and a concave
+Cartesian surface (n₁=1.0, n₂=1.5, object at −100 mm, virtual image at −40 mm) — in both
+cases the virtual image lies between the object and the element, as expected from a
+diverging optical system:
 
 | Divergent LSOE — before | Divergent LSOE — after |
 |---|---|
