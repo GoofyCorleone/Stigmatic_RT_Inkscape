@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<inkscape-extension xmlns="http://www.inkscape.org/namespace/inkscape/extension">
+    <name>Superficie Cartesiana</name>
+    <id>damienBloch/inkscape-raytracing/superficie_cartesiana</id>
+
+    <param name="tab" type="notebook">
+
+        <!-- ══ Tab 1: Parámetros Físicos ══════════════════════════════════ -->
+        <page name="fisico" gui-text="Parámetros Físicos">
+
+            <label appearance="header">Índices de refracción</label>
+            <param name="n1" type="float" min="1.0" max="5.0" precision="4"
+                   gui-text="n₁ (medio objeto):">1.0</param>
+            <param name="n2" type="float" min="1.0" max="5.0" precision="4"
+                   gui-text="n₂ (medio imagen / vidrio):">1.5</param>
+
+            <separator/>
+            <label appearance="header">Posiciones axiales</label>
+            <param name="d_objeto" type="float" min="-10000" max="10000" precision="3"
+                   gui-text="d₀  (punto objeto):">-100.0</param>
+            <param name="d_imagen" type="float" min="-10000" max="10000" precision="3"
+                   gui-text="d₁  (punto imagen / imagen intermedia):">200.0</param>
+            <param name="zeta" type="float" min="-10000" max="10000" precision="3"
+                   gui-text="ζ   (posición del vértice):">0.0</param>
+
+        </page>
+
+        <!-- ══ Tab 2: Parámetros GOTS ══════════════════════════════════════ -->
+        <page name="gots" gui-text="Parámetros GOTS">
+
+            <label appearance="header">Parámetros de forma GOTS</label>
+            <param name="G_param" type="float" min="-1e9" max="1e9" precision="6"
+                   gui-text="G:">1.5</param>
+            <param name="O_param" type="float" min="-1e9" max="1e9" precision="6"
+                   gui-text="O (curvatura paraxial, 1/longitud):">0.015</param>
+            <param name="T_param" type="float" min="-1e9" max="1e9" precision="8"
+                   gui-text="T (1/longitud³):">1.5e-6</param>
+            <param name="S_param" type="float" min="-1e9" max="1e9" precision="6"
+                   gui-text="S:">0.005</param>
+            <param name="zeta_gots" type="float" min="-10000" max="10000" precision="3"
+                   gui-text="ζ (posición del vértice):">0.0</param>
+            <label>n₂ (índice del vidrio) se toma de la pestaña anterior.</label>
+
+        </page>
+
+        <!-- ══ Tab 3: Geometría y visualización ═══════════════════════════ -->
+        <page name="geometria" gui-text="Geometría">
+
+            <label appearance="header">Apertura</label>
+            <param name="r_apertura" type="float" min="0" max="10000" precision="3"
+                   gui-text="Radio de apertura r_max (0 = óvalo completo):">0.0</param>
+            <label>Si r_max = 0, se dibuja el óvalo de Descartes completo
+hasta su ecuador natural (máximo radio físico).</label>
+            <param name="unidad" type="enum" gui-text="Unidades:">
+                <item value="mm">mm</item>
+                <item value="cm">cm</item>
+                <item value="in">in</item>
+                <item value="px">px</item>
+            </param>
+
+            <separator/>
+            <label appearance="header">Elementos de visualización</label>
+            <param name="mostrar_eje" type="boolean"
+                   gui-text="Dibujar eje óptico">true</param>
+            <param name="mostrar_puntos" type="boolean"
+                   gui-text="Marcar puntos objeto e imagen">true</param>
+
+            <separator/>
+            <label appearance="header">Haz de rayos (solo modo físico)</label>
+            <param name="generar_haz" type="boolean"
+                   gui-text="Generar haz de rayos desde el objeto">true</param>
+            <param name="n_rayos" type="int" min="1" max="51"
+                   gui-text="Número de rayos:">7</param>
+            <param name="angulo_max_deg" type="float" min="0.1" max="45" precision="2"
+                   gui-text="Ángulo máximo del haz (°):">10.0</param>
+
+        </page>
+
+    </param>
+
+    <effect>
+        <object-type>all</object-type>
+        <effects-menu>
+            <submenu name="Optics"/>
+        </effects-menu>
+    </effect>
+
+    <script>
+        <command location="inx" interpreter="python">superficie_cartesiana.py</command>
+    </script>
+
+</inkscape-extension>

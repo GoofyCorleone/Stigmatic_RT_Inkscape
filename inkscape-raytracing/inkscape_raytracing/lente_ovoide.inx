@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<inkscape-extension xmlns="http://www.inkscape.org/namespace/inkscape/extension">
+    <name>Lente Ovoide (LSOE)</name>
+    <id>damienBloch/inkscape-raytracing/lente_ovoide</id>
+
+    <param name="tab" type="notebook">
+
+        <!-- ══ Tab 1: Diseño ════════════════════════════════════════════ -->
+        <page name="diseno" gui-text="Diseño de la lente">
+
+            <label appearance="header">Índices de refracción</label>
+            <param name="n0" type="float" min="1.0" max="5.0" precision="4"
+                   gui-text="n₀  (espacio objeto, generalmente aire = 1):">1.0</param>
+            <param name="n1" type="float" min="1.0" max="5.0" precision="4"
+                   gui-text="n₁  (vidrio de la lente):">1.6</param>
+            <param name="n2" type="float" min="1.0" max="5.0" precision="4"
+                   gui-text="n₂  (espacio imagen, generalmente aire = 1):">1.0</param>
+
+            <separator/>
+            <label appearance="header">Posiciones axiales</label>
+            <param name="zeta_0" type="float" min="-10000" max="10000" precision="3"
+                   gui-text="ζ₀  (vértice superficie frontal):">0.0</param>
+            <param name="zeta_1" type="float" min="-10000" max="10000" precision="3"
+                   gui-text="ζ₁  (vértice superficie trasera):">10.0</param>
+            <param name="d_objeto" type="float" min="-10000" max="10000" precision="3"
+                   gui-text="d₀  (punto objeto, debe ser &lt; ζ₀):">-80.0</param>
+            <param name="d_imagen" type="float" min="-10000" max="10000" precision="3"
+                   gui-text="d₂  (punto imagen, debe ser &gt; ζ₁):">110.0</param>
+
+            <separator/>
+            <label appearance="header">Factor de forma</label>
+            <param name="sigma" type="float" min="-1.0" max="1.0" precision="3"
+                   gui-text="σ  (−1 = plano-conv., 0 = biconvexo, +1 = conv.-plano):">0.0</param>
+
+            <separator/>
+            <param name="unidad" type="enum" gui-text="Unidades:">
+                <item value="mm">mm</item>
+                <item value="cm">cm</item>
+                <item value="in">in</item>
+                <item value="px">px</item>
+            </param>
+
+        </page>
+
+        <!-- ══ Tab 2: Apertura y haz ════════════════════════════════════ -->
+        <page name="haz" gui-text="Apertura y Haz">
+
+            <label appearance="header">Apertura de la lente</label>
+            <param name="r_apertura" type="float" min="0" max="10000" precision="3"
+                   gui-text="Radio de apertura r_max (0 = calcular automático):">0.0</param>
+            <label>Si r_max = 0, la apertura se calcula como la intersección de
+los dos óvalos (comportamiento físico real).</label>
+
+            <separator/>
+            <label appearance="header">Haz de rayos desde el punto objeto</label>
+            <param name="n_rayos" type="int" min="1" max="51"
+                   gui-text="Número de rayos:">9</param>
+            <param name="angulo_max_deg" type="float" min="0.1" max="30" precision="2"
+                   gui-text="Ángulo máximo del haz (°):">8.0</param>
+
+            <separator/>
+            <label appearance="header">Elementos de visualización</label>
+            <param name="mostrar_eje" type="boolean"
+                   gui-text="Dibujar eje óptico">true</param>
+            <param name="mostrar_puntos" type="boolean"
+                   gui-text="Marcar puntos objeto e imagen">true</param>
+
+        </page>
+
+    </param>
+
+    <effect>
+        <object-type>all</object-type>
+        <effects-menu>
+            <submenu name="Optics"/>
+        </effects-menu>
+    </effect>
+
+    <script>
+        <command location="inx" interpreter="python">lente_ovoide.py</command>
+    </script>
+
+</inkscape-extension>
