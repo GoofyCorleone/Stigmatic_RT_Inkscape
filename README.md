@@ -22,6 +22,7 @@ Stigmatism) / Cartesian-oval formulation:
 | `inkscape-raytracing/inkscape_raytracing/lente_ovoide.py` / `.inx` | Generates a full **LSOE** (Lente Singlete Ovoide Estigmática) — a biconvex / plano-convex / meniscus singlet whose **two** surfaces are Cartesian ovals, designed by the shape factor σ. |
 | `inkscape-raytracing/inkscape_raytracing/gots_util.py` | Shared helpers: `calcular_gots`, `perfil_superficie`, `perfil_ovoide_descartes`, `encontrar_apertura`, `calcular_d1_sigma`, `perfil_a_path_str`. |
 | `generar_lsoe_svg.py` | Standalone script (no Inkscape needed) that writes a ready-to-trace `lsoe_raytracing.svg`. |
+| `generar_ejemplos.py` | Regenerates the four example SVGs in this README (before / after ray tracing, for both elements). |
 
 The generated elements are tagged `optics:glass:{n}` and `optics:beam`, so they are picked up directly by the
 upstream **Extensions → Optics → Ray Tracing** command.
@@ -32,16 +33,22 @@ All source code, labels and comments are in **Spanish** (`fuente`, `apertura`, `
 
 ## Example results
 
-A biconvex LSOE designed for object at `d₀ = 0 mm`, image at `d₂ = 200 mm`, `n₁ = 1.6`, σ = 0, rays diverging
-from the object point:
+A biconvex LSOE designed for object at `d₀ = 0 mm`, image at `d₂ = 200 mm`, `n₁ = 1.6`, σ = 0, with 11
+rays diverging up to ±7°, before and after ray-tracing:
 
-![LSOE traced](lsoe_raytracing_traced.svg)
+| Before tracing (generator output) | After tracing (canonical engine) |
+|---|---|
+| ![LSOE](ejemplo_lsoe.svg) | ![LSOE traced](ejemplo_lsoe_traced.svg) |
 
-A single Cartesian-oval plano-convex lens:
+A single Cartesian-oval refracting surface (n₁=1, n₂=1.5, object at −100 mm, image at +200 mm):
 
-![Cartesian oval traced](ovoide_descartes_traced.svg)
+| Before | After |
+|---|---|
+| ![Cartesian oval](ejemplo_cartesiana.svg) | ![Cartesian oval traced](ejemplo_cartesiana_traced.svg) |
 
-All rays converge **exactly** to the image point — there is no spherical aberration by construction.
+All rays converge to the image point (green dot) to numerical precision — these are rigorously
+stigmatic surfaces. The path is emitted as cubic Bézier arcs with Catmull–Rom tangents, which gives
+O(h⁴) approximation error and eliminates the focus drift that a polyline of `L` segments produces.
 
 ---
 

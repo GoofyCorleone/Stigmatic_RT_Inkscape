@@ -46,11 +46,10 @@
         <!-- ══ Tab 3: Geometría y visualización ═══════════════════════════ -->
         <page name="geometria" gui-text="Geometría">
 
-            <label appearance="header">Apertura</label>
+            <label>Esta extensión siempre dibuja el óvalo de Descartes cerrado
+completo.  La pestaña «Geometría» sólo fija opciones de visualización.</label>
             <param name="r_apertura" type="float" min="0" max="10000" precision="3"
-                   gui-text="Radio de apertura r_max (0 = óvalo completo):">0.0</param>
-            <label>Si r_max = 0, se dibuja el óvalo de Descartes completo
-hasta su ecuador natural (máximo radio físico).</label>
+                   gui-text="(parámetro obsoleto, ignorado):">0.0</param>
             <param name="unidad" type="enum" gui-text="Unidades:">
                 <item value="mm">mm</item>
                 <item value="cm">cm</item>
@@ -66,7 +65,7 @@ hasta su ecuador natural (máximo radio físico).</label>
                    gui-text="Marcar puntos objeto e imagen">true</param>
 
             <separator/>
-            <label appearance="header">Haz de rayos (solo modo físico)</label>
+            <label appearance="header">Haz de rayos (sólo cuando se usa la pestaña Físico)</label>
             <param name="generar_haz" type="boolean"
                    gui-text="Generar haz de rayos desde el objeto">true</param>
             <param name="n_rayos" type="int" min="1" max="51"

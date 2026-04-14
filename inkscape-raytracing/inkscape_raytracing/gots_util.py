@@ -180,6 +180,90 @@ def perfil_ovoide_descartes(n0, n1, zeta, d_obj, d_img, N=400):
     return zs, rs
 
 
+def perfil_gots_oval_completo(params, N=400):
+    """Óvalo de Descartes COMPLETO a partir de los parámetros GOTS.
+
+    Resuelve la cuadrática en τ (Eq. 9 de Silva-Lora) combinando las dos
+    ramas τ₋ (cerca del vértice) y τ₊ (lejos del vértice) para obtener el
+    contorno cerrado del óvalo en el plano meridiano.
+
+    Devuelve:
+        (z_arr, r_arr) con la rama superior (r ≥ 0) desde el vértice
+        frontal hasta el vértice trasero del óvalo, ordenada por z
+        creciente cuando el óvalo es convexo hacia +z.  El contorno
+        cerrado se obtiene reflejando r → −r.
+        (None, None) si los parámetros GOTS no definen un óvalo cerrado.
+    """
+    O  = float(params['O'])
+    T  = float(params['T'])
+    S  = float(params['S'])
+    OG = float(params['OG'])
+    zeta = float(params['zeta'])
+
+    if abs(OG) < 1e-30:
+        return None, None
+
+    coef_rad = 2.0 * S - O * OG
+    # Dominio de ρ: 1 + coef_rad·ρ² ≥ 0
+    if coef_rad < -1e-15:
+        rho_dom = np.sqrt(-1.0 / coef_rad)
+    else:
+        rho_dom = 1.0e4   # sin límite estricto
+
+    # El óvalo real (rama «cercana al vértice», τ₋) se traza al variar ρ
+    # desde 0 hasta ρ_max, donde r² = ρ² − τ₋² vuelve a anularse (vértice
+    # trasero).  Primero hallamos ρ_max buscando el segundo cero de r(ρ).
+    def _tau_menos(rho):
+        rho2 = rho * rho
+        radical = np.sqrt(max(1.0 + coef_rad * rho2, 0.0))
+        denom = 1.0 + S * rho2 + radical
+        if abs(denom) < 1e-30:
+            return 0.0
+        return (O + T * rho2) * rho2 / denom
+
+    def _r2(rho):
+        t = _tau_menos(rho)
+        return rho * rho - t * t
+
+    # Barrido grueso para encontrar ρ_max (segundo cero de r(ρ))
+    M = 4000
+    rho_busq = np.linspace(1e-6, rho_dom * 0.999999, M)
+    r2_busq  = np.array([_r2(x) for x in rho_busq])
+    sig      = np.sign(r2_busq)
+    cambios  = np.where(np.diff(sig) != 0)[0]
+    if len(cambios) == 0:
+        # r² no cambia de signo: óvalo no cerrado con esta rama
+        return None, None
+    # primer cruce = vértice trasero del óvalo
+    idx = cambios[0]
+    # refinamos por bisección
+    a, b = rho_busq[idx], rho_busq[idx + 1]
+    for _ in range(60):
+        c = 0.5 * (a + b)
+        if _r2(c) > 0:
+            a = c
+        else:
+            b = c
+    rho_max = 0.5 * (a + b)
+
+    # Muestreo Chebyshev denso en ambos extremos (vértice frontal y trasero)
+    ks   = np.arange(N)
+    cheb = 0.5 * (1.0 - np.cos(np.pi * ks / (N - 1)))
+    rho  = rho_max * cheb
+
+    rho2    = rho ** 2
+    radical = np.sqrt(np.maximum(1.0 + coef_rad * rho2, 0.0))
+    tau     = (O + T * rho2) * rho2 / (1.0 + S * rho2 + radical)
+    r2      = np.maximum(rho2 - tau ** 2, 0.0)
+    rs      = np.sqrt(r2)
+    zs      = zeta + tau
+
+    # forzar r=0 exacto en los vértices
+    rs[0]  = 0.0
+    rs[-1] = 0.0
+    return zs, rs
+
+
 def perfil_superficie(params, N=500, r_max=None):
     """Perfil meridional (r, z) de una superficie cartesiana.
 
@@ -333,6 +417,74 @@ def calcular_d1_sigma(sigma, zeta_0, zeta_1, d_0, d_2, n_0, n_1, n_2):
 
 
 # ── Conversión de perfil a path SVG ───────────────────────────────────────
+
+
+def puntos_a_bezier_path_str(puntos_xy, cerrar=True, tension=1.0 / 3.0):
+    """Convierte una secuencia de puntos (x, y) en un path SVG de curvas
+    cúbicas Bézier (`M ... C ... C ... Z`) que aproxima la curva suave
+    que los une.  Las tangentes se estiman por diferencias centradas
+    (spline de Catmull–Rom con tensión=1/3, equivalente al cubic
+    cardinal spline estándar).
+
+    El ray-tracer de Inkscape representa cada segmento como un Bézier
+    cúbico, de modo que un path explícitamente Bézier se aproxima a la
+    superficie continua con error O(h⁴) en la longitud de segmento —
+    mucho mejor que los O(h²) de los segmentos rectos `L`, eliminando
+    casi por completo el desplazamiento del foco debido al muestreo.
+
+    Args:
+        puntos_xy: lista o array (N, 2)
+        cerrar   : si True añade 'Z' y usa tangentes periódicas
+        tension  : factor de mano del handle Bézier (1/3 = aproximación
+                   óptima para arcos suaves).
+
+    Returns:
+        str con el path SVG
+    """
+    pts = [(float(x), float(y)) for x, y in puntos_xy]
+    n = len(pts)
+    if n == 0:
+        return ""
+    if n == 1:
+        return f"M {pts[0][0]:.5f},{pts[0][1]:.5f}"
+    if n == 2:
+        return (f"M {pts[0][0]:.5f},{pts[0][1]:.5f} "
+                f"L {pts[1][0]:.5f},{pts[1][1]:.5f}"
+                + (" Z" if cerrar else ""))
+
+    # Tangentes (dx_i, dy_i) por diferencia central.  Para curvas cerradas se
+    # toman índices módulo n; para abiertas se usan diferencias hacia delante
+    # en los extremos.
+    tx = [0.0] * n
+    ty = [0.0] * n
+    for i in range(n):
+        if cerrar:
+            ip = (i + 1) % n
+            im = (i - 1) % n
+        else:
+            ip = min(i + 1, n - 1)
+            im = max(i - 1, 0)
+        tx[i] = pts[ip][0] - pts[im][0]
+        ty[i] = pts[ip][1] - pts[im][1]
+
+    partes = [f"M {pts[0][0]:.5f},{pts[0][1]:.5f}"]
+    ult = n if cerrar else n - 1
+    for i in range(ult):
+        j = (i + 1) % n
+        p0x, p0y = pts[i]
+        p3x, p3y = pts[j]
+        # Handles: P1 = P0 + τ·T_i ; P2 = P3 − τ·T_j
+        p1x = p0x + tension * tx[i]
+        p1y = p0y + tension * ty[i]
+        p2x = p3x - tension * tx[j]
+        p2y = p3y - tension * ty[j]
+        partes.append(
+            f"C {p1x:.5f},{p1y:.5f} {p2x:.5f},{p2y:.5f} "
+            f"{p3x:.5f},{p3y:.5f}"
+        )
+    if cerrar:
+        partes.append("Z")
+    return " ".join(partes)
 
 
 def perfil_a_path_str(puntos_xy, cerrar=True):

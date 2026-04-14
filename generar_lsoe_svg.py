@@ -25,7 +25,7 @@ from gots_util import (
     perfil_superficie,
     encontrar_apertura,
     calcular_d1_sigma,
-    perfil_a_path_str,
+    puntos_a_bezier_path_str,
 )
 
 # ── Parámetros del sistema ──────────────────────────────────────────────────
@@ -58,8 +58,8 @@ p1 = calcular_gots(N1, N2, ZETA1, d1, D2)
 r_ap = encontrar_apertura(p0, p1)
 print(f"Apertura: r = {r_ap:.4f} mm")
 
-r0_arr, z0_arr = perfil_superficie(p0, N=400, r_max=r_ap)
-r1_arr, z1_arr = perfil_superficie(p1, N=400, r_max=r_ap)
+r0_arr, z0_arr = perfil_superficie(p0, N=600, r_max=r_ap)
+r1_arr, z1_arr = perfil_superficie(p1, N=600, r_max=r_ap)
 
 # Normalizar: vértice frontal en el origen (x = z − ZETA0, y = −r)
 def px(val_mm):
@@ -95,7 +95,7 @@ puntos.append((xcoord(z0_arr[-1]), ycoord_lower(r0_arr[-1])))
 for z, r in zip(reversed(list(z0_arr[:-1])), reversed(list(r0_arr[:-1]))):
     puntos.append((xcoord(z), ycoord_lower(r)))
 
-lens_path_d = perfil_a_path_str(puntos, cerrar=True)
+lens_path_d = puntos_a_bezier_path_str(puntos, cerrar=True)
 
 # ── Haces de rayos desde el punto objeto ───────────────────────────────────
 x_fuente  = xcoord(D0)

@@ -19,7 +19,7 @@ from gots_util import (
     perfil_superficie,
     encontrar_apertura,
     calcular_d1_sigma,
-    perfil_a_path_str,
+    puntos_a_bezier_path_str,
 )
 
 
@@ -105,8 +105,8 @@ class LenteOvoide(inkex.GenerateExtension):
             return
 
         # ── 4. Perfiles de ambas superficies ─────────────────────────────
-        r0_arr, z0_arr = perfil_superficie(params0, N=400, r_max=r_ap)
-        r1_arr, z1_arr = perfil_superficie(params1, N=400, r_max=r_ap)
+        r0_arr, z0_arr = perfil_superficie(params0, N=600, r_max=r_ap)
+        r1_arr, z1_arr = perfil_superficie(params1, N=600, r_max=r_ap)
 
         if len(r0_arr) < 2 or len(r1_arr) < 2:
             inkex.utils.errormsg(
@@ -165,7 +165,7 @@ class LenteOvoide(inkex.GenerateExtension):
 
         lente = inkex.PathElement()
         lente.style = self.style_lente
-        lente.path  = inkex.Path(perfil_a_path_str(puntos, cerrar=True))
+        lente.path  = inkex.Path(puntos_a_bezier_path_str(puntos, cerrar=True))
         lente.desc  = f"optics:glass:{opts.n1:.4f}"
         yield lente
 
