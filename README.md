@@ -46,6 +46,22 @@ A single Cartesian-oval refracting surface (n₁=1, n₂=1.5, object at −100 m
 |---|---|
 | ![Cartesian oval](ejemplo_cartesiana.svg) | ![Cartesian oval traced](ejemplo_cartesiana_traced.svg) |
 
+### Divergent configurations
+
+Both elements also produce rigorously stigmatic **virtual** images. A divergent LSOE (σ=0,
+object at `d₀ = −100 mm`, virtual image at `d₂ = −250 mm`) and a divergent Cartesian surface
+(n₁=1.5, n₂=1.0, object at −100 mm, virtual image at −250 mm):
+
+| Divergent LSOE — before | Divergent LSOE — after |
+|---|---|
+| ![LSOE div](ejemplo_lsoe_divergente.svg) | ![LSOE div traced](ejemplo_lsoe_divergente_traced.svg) |
+
+| Divergent oval — before | Divergent oval — after |
+|---|---|
+| ![Cartesian div](ejemplo_cartesiana_divergente.svg) | ![Cartesian div traced](ejemplo_cartesiana_divergente_traced.svg) |
+
+The dashed back-extrapolations of the refracted rays meet exactly at the virtual image point.
+
 All rays converge to the image point (green dot) to numerical precision — these are rigorously
 stigmatic surfaces. The path is emitted as cubic Bézier arcs with Catmull–Rom tangents, which gives
 O(h⁴) approximation error and eliminates the focus drift that a polyline of `L` segments produces.
