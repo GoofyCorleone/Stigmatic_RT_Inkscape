@@ -165,6 +165,111 @@ feasible).
 
 ---
 
+## Using the GOTS parameters directly
+
+The **Superficie Cartesiana** extension has three tabs:
+
+| Tab | What it does |
+|---|---|
+| **Parámetros Físicos** | You give `n₁, n₂, d₀, d₁, ζ`. The extension calls `calcular_gots` internally to derive `(G, O, T, S, OG)` and draws the full Descartes oval. |
+| **Parámetros GOTS** | You give `(G, O, T, S, ζ)` (plus `n₂` from the previous tab) directly — useful when you already know the parameters from a paper (e.g. Table 4 of Silva-Lora 2024) or want to sweep a parameter for pedagogic figures. The oval is drawn closed and complete. |
+| **Geometría** | Visualization-only knobs (units, optical axis, object/image markers, ray-fan options). The oval is **always** drawn complete; the legacy `r_apertura` field is ignored. |
+
+### What each GOTS coefficient means
+
+For a surface with vertex at `ζ` separating media `n_k → n_{k+1}`, with object at `d_k`
+and image at `d_{k+1}`, Silva-Lora's Eqs. 10–13 give:
+
+| Symbol | Meaning |
+|---|---|
+| `O` | paraxial curvature at the vertex (`1/R`, signed; units `1/length`) |
+| `T` | 4th-order deformation coefficient (`1/length³`) |
+| `S` | conic-like coupling term |
+| `G` | axial shift `G = OG / O` (with units of length); together with `O` it fixes the on-axis intercept |
+| `OG` | the product `O·G`, appears explicitly in the radical of Eq. 16 |
+| `ζ`  | axial position of the vertex |
+
+The implicit surface equation (Eq. 16) is
+
+```
+τ(ρ) = (O + T·ρ²)·ρ²  /  [1 + S·ρ² + √(1 + (2S − O·OG)·ρ²)]
+z(ρ) = ζ + τ(ρ)
+```
+
+which is solved exactly — no polynomial expansion is used.
+
+### Recovering physical parameters from GOTS
+
+If you know `(n_k, n_{k+1}, O, T, S)` you can recover `(d_k, d_{k+1})` analytically by
+inverting Eqs. 10–13. The helper used internally is purely forward (physical → GOTS),
+but the inverse is one-liner algebra if you need it.
+
+### Typical workflow
+
+1. Start in **Parámetros Físicos**: you almost always know `n₁, n₂, d₀, d₁, ζ`.
+2. Apply the extension, then open the generated `<desc>` tag to read the derived GOTS
+   parameters (they are logged to stderr when the extension runs).
+3. If you now want to tweak `T` or `S` independently (e.g. explore a non-physical
+   deformation), switch to **Parámetros GOTS**, paste the values, and perturb.
+
+---
+
+## Generating divergent surfaces
+
+Both elements are rigorously stigmatic for **virtual** images too — the same GOTS
+machinery handles converging and diverging configurations with no sign conventions
+to remember. The only rule:
+
+> For a diverging element with a **real** object, the virtual image must lie
+> **between the object and the element** (closer to the element than the object,
+> on the same side).
+
+### Divergent single surface (Superficie Cartesiana)
+
+Use the **Parámetros Físicos** tab with both `d₀` and `d₁` negative (same side as the
+object) and `|d₁| < |d₀|`. Example (n₁=1, n₂=1.5, ζ=0):
+
+| Field | Value |
+|---|---|
+| `n₁` | 1.0 |
+| `n₂` | 1.5 |
+| `d₀` | −100 mm |
+| `d₁` | −40 mm |
+| `ζ`  | 0 mm |
+
+The result is a concave Cartesian oval. After ray-tracing, the refracted rays
+diverge and their back-extrapolations meet exactly at z = −40 mm (virtual image).
+
+### Divergent LSOE (Lente Ovoide)
+
+Use the **Lente Ovoide (LSOE)** extension with both `d₀` and `d₂` negative and
+`|d₂| < |d₀|`. Example (σ=0, symmetric biconcave):
+
+| Field | Value |
+|---|---|
+| `n₀, n₁, n₂` | 1.0, 1.6, 1.0 |
+| `ζ₀, ζ₁` | 0 mm, 5 mm |
+| `d₀` | −100 mm |
+| `d₂` | −40 mm |
+| `σ` | 0 |
+
+`calcular_d1_sigma` places the intermediate (virtual) image so that both surfaces
+share the same shape factor, producing a clean biconcave singlet. Any σ ∈ [−1, +1]
+works — σ = ±1 gives plano-concave.
+
+### Rule of thumb
+
+| Configuration | Object `d₀` | Image `d₁` or `d₂` | Shape |
+|---|---|---|---|
+| Convergent, real image | any | opposite sign from `d₀`, or `|d| > |d₀|` | convex / biconvex |
+| Divergent, virtual image | negative (real object) | negative, `|d| < |d₀|` | concave / biconcave |
+
+If the extension errors out with *"parámetro degenerado"* it means the configuration
+is geometrically impossible (e.g. object at the vertex, or `κ = n₁·η − n₀·ξ = 0`) —
+adjust `d₀`, `d₁` or `ζ`.
+
+---
+
 ## How it works (very briefly)
 
 For each surface the code solves the **GOTS quartic** for the coefficients `(G, O, T, S)` that define the
