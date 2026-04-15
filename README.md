@@ -65,7 +65,40 @@ diverging optical system:
 The dashed back-extrapolations of the refracted rays meet exactly at the virtual image point.
 
 All rays converge to the image point (green dot) to numerical precision — these are rigorously
-stigmatic surfaces. The path is emitted as cubic Bézier arcs with Catmull–Rom tangents, which gives
+stigmatic surfaces.
+
+### Two-lens collimator (spherical → plane wavefront)
+
+A point source is placed at the object focus of a first LSOE (σ=0), which images it onto
+an intermediate real focus; a second LSOE then images that intermediate focus to infinity,
+so the output is a plane wavefront. Both lenses are rigorously stigmatic Cartesian-oval
+singlets:
+
+| Before | After (canonical engine) |
+|---|---|
+| ![Collimator](ejemplo_colimador.svg) | ![Collimator traced](ejemplo_colimador_traced.svg) |
+
+### Multi-element experiment (all extension primitives)
+
+Using every optical primitive exposed by the extension — **LSOE lens**, **beam splitter**,
+**mirror**, **glass block** and two **beam dumps** — the canonical 2D engine
+(`raytracing.World`) traces a single-pass layout:
+
+```
+    fuente  ─►  LSOE colimadora  ─►  BS (45°) ─┬─►  vidrio n=1.5  ─►  dump T
+                                                │
+                                                └─►  espejo pliegue ─►  dump R
+```
+
+| Before | After (canonical engine) |
+|---|---|
+| ![Experiment](ejemplo_experimento.svg) | ![Experiment traced](ejemplo_experimento_traced.svg) |
+
+Every ray refracts at the lens surfaces, splits at the BS into transmitted/reflected pairs,
+refracts through the glass slab on the transmitted arm (two parallel shifts), reflects
+off the fold mirror on the reflected arm, and finally terminates at a beam dump. The
+script `generar_ejemplos_avanzados.py` builds the scene and runs the canonical tracer
+without invoking Inkscape. The path is emitted as cubic Bézier arcs with Catmull–Rom tangents, which gives
 O(h⁴) approximation error and eliminates the focus drift that a polyline of `L` segments produces.
 
 ---
