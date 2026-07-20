@@ -12,7 +12,7 @@
 ## What this fork adds
 
 The upstream extension lets you build optical systems in Inkscape using primitives such as mirrors, lenses and
-beams, and then traces rays through them. This fork adds two new generator extensions that produce
+beams, and then traces rays through them. This fork adds three new generator extensions that produce
 **rigorously stigmatic** (aberration-free) refractive elements based on the **GOTS** (General Oblique Theory of
 Stigmatism) / Cartesian-oval formulation:
 
@@ -20,7 +20,8 @@ Stigmatism) / Cartesian-oval formulation:
 |---|---|
 | `inkscape-raytracing/inkscape_raytracing/superficie_cartesiana.py` / `.inx` | Generates a single Cartesian-oval refracting surface (plano-cartesian lens) that images an on-axis object point perfectly into an on-axis image point for given indices `n₁, n₂`. |
 | `inkscape-raytracing/inkscape_raytracing/lente_ovoide.py` / `.inx` | Generates a full **LSOE** (Lente Singlete Ovoide Estigmática) — a biconvex / plano-convex / meniscus singlet whose **two** surfaces are Cartesian ovals, designed by the shape factor σ. |
-| `inkscape-raytracing/inkscape_raytracing/gots_util.py` | Shared helpers: `calcular_gots`, `perfil_superficie`, `perfil_ovoide_descartes`, `encontrar_apertura`, `calcular_d1_sigma`, `perfil_a_path_str`. |
+| `inkscape-raytracing/inkscape_raytracing/lente_aplanatica.py` / `.inx` | Generates a **rigorously aplanatic** singlet — free of spherical aberration *and* coma exactly — in the four closed-form types of the generalized aplanatism condition. See [Rigorously aplanatic lenses](#rigorously-aplanatic-lenses-lente-aplanática). |
+| `inkscape-raytracing/inkscape_raytracing/gots_util.py` | Shared helpers: `calcular_gots`, `perfil_superficie`, `perfil_ovoide_descartes`, `encontrar_apertura`, `calcular_d1_sigma`, `disenar_aplanatica`, `condicion_aplanatismo`, `perfil_a_path_str`. |
 | `generar_lsoe_svg.py` | Standalone script (no Inkscape needed) that writes a ready-to-trace `lsoe_raytracing.svg`. |
 | `generar_ejemplos.py` | Regenerates the four example SVGs in this README (before / after ray tracing, for both elements). |
 
@@ -191,8 +192,9 @@ cp -r inkscape-raytracing/inkscape_raytracing/* \
 Restart Inkscape. You should now see, under **Extensions**:
 
 - **Optics → Ray Tracing** (original, traces rays)
-- **Generate from Path → Superficie Cartesiana** (new)
-- **Generate from Path → Lente Ovoide (LSOE)** (new)
+- **Optics → Superficie Cartesiana** (new)
+- **Optics → Lente Ovoide (LSOE)** (new)
+- **Optics → Lente Aplanática** (new)
 
 ### 4. Python dependencies
 
@@ -355,6 +357,74 @@ works — σ = ±1 gives plano-concave.
 If the extension errors out with *"parámetro degenerado"* it means the configuration
 is geometrically impossible (e.g. object at the vertex, or `κ = n₁·η − n₀·ξ = 0`) —
 adjust `d₀`, `d₁` or `ζ`.
+
+---
+
+## Rigorously aplanatic lenses (Lente Aplanática)
+
+A third generator, **Extensions → Optics → Lente Aplanática**, builds singlet
+lenses that are free of spherical aberration **and coma exactly** (not as a
+paraxial approximation), implementing the four closed-form solutions of the
+generalized aplanatism condition `M(ρₖ) = 1` from chapter 4 of Silva-Lora's
+thesis (Eqs. 78/92/93):
+
+| Type | Surfaces | Image | Extra property |
+|---|---|---|---|
+| **Tipo-0** | spheres at the Young points (`2Sₖ = GₖOₖ²`) | virtual | also free of astigmatism (anastigmatic) |
+| **Tipo-1** | identical conics, collimated interior (`d₁ → ∞`) | real (`M = −1`, biconvex) or virtual (`M = +1`, meniscus) | classic biconic lens |
+| **Tipo-2** | flat-vertex ovoids (`Oₖ = 0`) | virtual | generalizes the plane-parallel plate; ophthalmic-style |
+| **Tipo-3** | `Gₖ = 0` ovoids | virtual | positive meniscus |
+
+You specify the refractive indices, the two vertices `ζ₀, ζ₁` and the object
+position `d₀`; the image position `d₂` is *determined* by the design and marked
+on the canvas (hollow circle when virtual). Types 1–3 require `n₂ = n₀`
+(enforced, per Eq. 112). An optional physical pupil (two beam-dump segments)
+can be drawn as in the thesis figures. The defaults reproduce the thesis
+examples exactly (object at 0, vertices at 60/70, `n₁ = 1.8` — Tables 6–9).
+
+The mathematical core lives in `gots_util.py`:
+
+- `disenar_aplanatica(tipo, n0, n1, ζ0, ζ1, d0, ...)` — conjugates, GOTS
+  parameters and lateral magnification for each type (validated against
+  thesis Tables 6–9 in `tests/unit/test_aplanatico.py`).
+- `inversa_vc(sup, ρ)` — Eq. 92 in a robust form: using the identity
+  `T = S²/OG`, `1/V̄C̄ = [O + 2(2T − S·O)ρ²/(1+rad)]/rad`, valid in every
+  degenerate limit (O=0, G=0 or ∞).
+- `factor_aplanatismo` / `condicion_aplanatismo` / `rms_aplanatismo` —
+  Eqs. 78 and 94, for verifying `M = 1` (or optimizing approximate designs).
+- `alturas_estigmaticas` — chains the exact stigmatic geometry to obtain the
+  physical ray heights `ρ₀ → ρ₁` without a ray tracer.
+
+### The four types traced
+
+`generar_ejemplos_aplanaticos.py` reproduces the thesis figures 21, 24, 27 and 30:
+each lens is traced with two object points — one on axis (blue, H = 0) and one
+off axis (orange, H = 8 mm) — through the canonical engine, over the *same*
+Bézier geometry the extension writes into the SVG. Dashed extensions mark the
+virtual image where the emerging rays only appear to come from.
+
+| | |
+|---|---|
+| ![Tipo-0](ejemplo_aplanatica_tipo0.svg) | ![Tipo-1](ejemplo_aplanatica_tipo1.svg) |
+| ![Tipo-2](ejemplo_aplanatica_tipo2.svg) | ![Tipo-3](ejemplo_aplanatica_tipo3.svg) |
+
+The design conjugates come out exactly as tabulated in the thesis:
+`d₁ = 26.666667, d₂ = −8` (Table 6), `d₁ = ∞, d₂ = 130` (Table 7),
+`d₂ = 4.444444` (Table 8) and `d₁ = 41.481481, d₂ = −22.4` (Table 9).
+
+### Validation
+
+Through the **real extension pipeline** (`render.py`, 9-ray fans at ±6°) all four
+types converge at the designed image point to **≤ 6·10⁻⁵ mm** and satisfy the Abbe
+sine condition (`sin θ₀ / sin θ_N` constant) to ~10⁻⁶ relative deviation.
+
+In the figures above the on-axis fans converge to **< 1 µm** — rigorous stigmatism
+at a numerical aperture no paraxial design could hold. Off-axis, the rays still
+form a sharp meridional focus (spot ≤ 3 µm at best focus, i.e. no coma); measured
+against the *flat paraxial* image plane the residual is 14–420 µm, which is the
+field curvature, astigmatism and distortion the thesis itself reports (≈60 µm for
+the anastigmatic tipo-0 at full field, Fig. 22). Aplanatism removes spherical
+aberration and coma — not the remaining primary aberrations.
 
 ---
 

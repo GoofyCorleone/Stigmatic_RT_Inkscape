@@ -25,6 +25,15 @@ from gots_util import (
     puntos_a_bezier_path_str,
 )
 
+# inkex serializa los números de un path con {:.6g}: para coordenadas
+# alejadas del origen eso cuantiza las normales de los segmentos Bézier
+# finos. Subimos la precisión global igual que en render.py.
+try:
+    from inkex.paths.interfaces import PathCommand as _PathCommand
+    _PathCommand.number_template = "{:.10g}"
+except ImportError:  # versiones antiguas de inkex
+    pass
+
 
 class SuperficieCartesiana(inkex.GenerateExtension):
     """Dibuja un óvalo de Descartes completo como lente refractante."""

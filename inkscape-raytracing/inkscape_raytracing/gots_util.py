@@ -431,6 +431,356 @@ def calcular_d1_sigma(sigma, zeta_0, zeta_1, d_0, d_2, n_0, n_1, n_2):
         return d1_mas if dist_mas >= dist_menos else d1_menos
 
 
+# ── Aplanatismo (capítulo 4 de Silva-Lora 2024) ───────────────────────────
+#
+# La condición de aplanatismo generalizada (Ec. 78/93) exige que
+#
+#     M(N, ρₖ) = ∏ₖ (n_{k+1}/n_k) · (1/(d_{k+1}−ζₖ) − 1/V̄C̄ₖ)
+#                                   ─────────────────────────────  =  1
+#                                   (1/(dₖ−ζₖ)     − 1/V̄C̄ₖ)
+#
+# para todos los rayos que acceden al sistema, donde V̄C̄ₖ es la distancia
+# vértice → corte de la normal con el eje (Ec. 92), función de ρₖ.
+
+
+def inversa_vc(sup, rho):
+    """1/V̄C̄ₖ — Ec. 92 de Silva-Lora en forma numéricamente robusta.
+
+    La forma publicada divide por G y por O, que degeneran en los tipos
+    rigurosamente aplanáticos (tipo-2: O=0, G=∞; tipo-3: G=0, S=0).
+    Usando la identidad T = S²/OG (válida idénticamente para las
+    Ecs. 10–13) la expresión se reescribe sin esas divisiones:
+
+        q(ρ) = [O + 2(2T − S·O)·ρ² / (1 + rad)] / rad ,
+        rad  = √(1 + (2S − O·OG)·ρ²) ,
+
+    que reproduce todos los límites: q(0) = O (curvatura paraxial),
+    tipo-1 (S=T=0) → O/rad, tipo-2 (O=0) → 4Tρ²/((1+rad)·rad).
+
+    Args:
+        sup: dict GOTS (claves O, T, S, OG) o superficie esférica
+             ({'esfera': True, 'O': 1/R})
+        rho: distancia vértice-superficie del punto de incidencia
+             (escalar o array)
+
+    Returns:
+        1/V̄C̄ (escalar o array según rho)
+    """
+    rho2 = np.asarray(rho, dtype=float) ** 2
+    if sup.get('esfera'):
+        # Esfera: la normal siempre pasa por el centro → V̄C̄ = R = cte.
+        return np.broadcast_to(float(sup['O']), rho2.shape).copy() \
+            if rho2.shape else float(sup['O'])
+    O, T, S, OG = (float(sup['O']), float(sup['T']),
+                   float(sup['S']), float(sup['OG']))
+    rad = np.sqrt(np.maximum(1.0 + (2.0 * S - O * OG) * rho2, 0.0))
+    return (O + 2.0 * (2.0 * T - S * O) * rho2 / (1.0 + rad)) / rad
+
+
+def factor_aplanatismo(sup, rho):
+    """Factor de la superficie k en la condición de aplanatismo (Ec. 78).
+
+    Args:
+        sup: dict de superficie con claves n_in, n_out, zeta, d_in, d_out
+             y los parámetros GOTS (o 'esfera'/'O' para esferas);
+             d_out = np.inf indica conjugado interno colimado (tipo-1).
+        rho: distancia vértice-superficie del punto de incidencia
+
+    Returns:
+        factor (float o array)
+    """
+    q = inversa_vc(sup, rho)
+    zeta = float(sup['zeta'])
+    d_in, d_out = float(sup['d_in']), float(sup['d_out'])
+    a = 0.0 if np.isinf(d_out) else 1.0 / (d_out - zeta)
+    b = 0.0 if np.isinf(d_in)  else 1.0 / (d_in  - zeta)
+    return (sup['n_out'] / sup['n_in']) * (a - q) / (b - q)
+
+
+def condicion_aplanatismo(diseno, rhos):
+    """M(N, ρₖ) — Ec. 78/93 — para un diseño de ``disenar_aplanatica``.
+
+    Args:
+        diseno: dict devuelto por ``disenar_aplanatica``
+        rhos  : secuencia con el ρₖ del rayo en cada superficie (en el
+                mismo orden que diseno['superficies'])
+
+    Returns:
+        M (float o array): el sistema es aplanático si M = 1 ∀ rayos.
+    """
+    M = 1.0
+    for sup, rho in zip(diseno['superficies'], rhos):
+        M = M * factor_aplanatismo(sup, rho)
+    return M
+
+
+def rms_aplanatismo(valores_M):
+    """(M − 1)_RMS — Ec. 94 — sobre un conjunto de rayos."""
+    v = np.asarray(valores_M, dtype=float)
+    return float(np.sqrt(np.mean(np.abs(v - 1.0) ** 2)))
+
+
+def _gots_limite_O_cero(n_k, n_k1, zeta_k, d_k):
+    """Parámetros GOTS exactos en el límite O = 0 (superficie tipo-2).
+
+    Con la condición (d_{k+1}−ζ)/n_{k+1} = (d_k−ζ)/n_k (Ec. 111) las
+    Ecs. 10–13 degeneran (O = 0, G = ∞) pero T, S y OG tienen límites
+    finitos que aquí se evalúan en forma cerrada.
+    """
+    xi = d_k - zeta_k
+    T  = n_k * (n_k1 + n_k) / (4.0 * n_k1 ** 2 * xi ** 3)
+    S  = (n_k1 ** 3 - n_k ** 3) / (2.0 * n_k1 ** 2 * xi ** 2 * (n_k1 - n_k))
+    OG = ((n_k1 ** 3 - n_k ** 3) ** 2
+          / (n_k * n_k1 ** 2 * xi * (n_k1 - n_k) * (n_k1 ** 2 - n_k ** 2)))
+    return {'G': float('inf'), 'O': 0.0, 'T': T, 'S': S, 'OG': OG,
+            'zeta': zeta_k}
+
+
+def disenar_aplanatica(tipo, n0, n1, zeta_0, zeta_1, d_0,
+                       n2=None, rama='real'):
+    """Diseña una lente singlete rigurosamente aplanática (§4.4 de la tesis).
+
+    Los cuatro tipos hacen M(ρₖ) ≡ 1 en todo rigor (sistemas libres de
+    aberración esférica Y de coma simultáneamente):
+
+      tipo 0: superficies esféricas con conjugados en los puntos de
+              Young (2Sₖ = GₖOₖ², Ecs. 95-96). Además anastigmática.
+      tipo 1: interior colimado (d₁ → ∞) → superficies cónicas idénticas
+              (S=T=0, Ec. 108); exige n₂=n₀ y |d₂−ζ₁| = |d₀−ζ₀|
+              (Ec. 107): rama='real' → biconvexa e imagen real;
+              rama='virtual' → menisco e imagen virtual.
+      tipo 2: Oₖ = 0 → ovoides de vértice plano (Ec. 113);
+              d_{k+1} = ζₖ + (n_{k+1}/nₖ)(dₖ − ζₖ) (Ec. 111).
+      tipo 3: Gₖ = 0 (Ec. 122);
+              d_{k+1} = ζₖ + (nₖ/n_{k+1})²(dₖ − ζₖ) (Ec. 121).
+
+    Args:
+        tipo   : 0, 1, 2 o 3
+        n0, n1 : índices del espacio objeto y de la lente
+        zeta_0, zeta_1: vértices de las dos superficies (ζ₁ > ζ₀)
+        d_0    : posición axial del punto objeto (d₀ < ζ₀ para objeto real)
+        n2     : índice del espacio imagen. Los tipos 1-3 exigen n₂ = n₀
+                 (se fuerza); el tipo 0 lo admite arbitrario (default n₀).
+        rama   : sólo tipo 1: 'real' (biconvexa) o 'virtual' (menisco)
+
+    Returns:
+        dict con claves:
+          tipo, n (n0,n1,n2), zetas (ζ₀,ζ₁), d (d₀,d₁,d₂),
+          magnificacion (aumento lateral M = ∏gₖ, Ec. 89),
+          superficies: [sup0, sup1] — cada sup con n_in, n_out, zeta,
+          d_in, d_out y parámetros GOTS ('esfera'+'R' para tipo 0).
+
+    Raises:
+        ValueError: parámetros degenerados o tipo desconocido.
+    """
+    tipo = int(tipo)
+    n0, n1 = float(n0), float(n1)
+    zeta_0, zeta_1, d_0 = float(zeta_0), float(zeta_1), float(d_0)
+
+    if abs(n1 - n0) < 1e-12:
+        raise ValueError("Se requiere n1 ≠ n0 (sin salto de índice no hay "
+                         "refracción).")
+    if abs(d_0 - zeta_0) < 1e-9:
+        raise ValueError("El objeto no puede coincidir con el vértice ζ₀.")
+    if zeta_1 <= zeta_0:
+        raise ValueError("Se requiere ζ₁ > ζ₀.")
+
+    if tipo == 0:
+        n2 = n0 if n2 is None else float(n2)
+        # Puntos de Young (Ecs. 95-96): dₖ−ζ = R(nₖ+n_{k+1})/nₖ
+        R0  = n0 * (d_0 - zeta_0) / (n0 + n1)
+        d_1 = zeta_0 + (n0 / n1) * (d_0 - zeta_0)
+        if abs(d_1 - zeta_1) < 1e-9:
+            raise ValueError("Conjugado intermedio sobre el vértice ζ₁; "
+                             "modifique ζ₁ o d₀.")
+        R1  = n1 * (d_1 - zeta_1) / (n1 + n2)
+        d_2 = zeta_1 + (n1 / n2) * (d_1 - zeta_1)
+        sup0 = {'esfera': True, 'R': R0, 'O': 1.0 / R0, 'zeta': zeta_0,
+                'n_in': n0, 'n_out': n1, 'd_in': d_0, 'd_out': d_1}
+        sup1 = {'esfera': True, 'R': R1, 'O': 1.0 / R1, 'zeta': zeta_1,
+                'n_in': n1, 'n_out': n2, 'd_in': d_1, 'd_out': d_2}
+
+    elif tipo == 1:
+        n2 = n0                     # exigido por M = 1 (Ec. 106)
+        d_1 = float('inf')
+        signo = -1.0 if rama == 'real' else +1.0     # Ec. 107
+        d_2 = zeta_1 + signo * (d_0 - zeta_0)
+        p0 = {'G': -(n1 / n0) ** 2,
+              'O': -n0 / ((d_0 - zeta_0) * (n1 - n0)),
+              'T': 0.0, 'S': 0.0, 'zeta': zeta_0}
+        p0['OG'] = p0['O'] * p0['G']
+        p1 = {'G': -(n1 / n2) ** 2,
+              'O': -n2 / ((d_2 - zeta_1) * (n1 - n2)),
+              'T': 0.0, 'S': 0.0, 'zeta': zeta_1}
+        p1['OG'] = p1['O'] * p1['G']
+        sup0 = dict(p0, n_in=n0, n_out=n1, d_in=d_0, d_out=d_1)
+        sup1 = dict(p1, n_in=n1, n_out=n2, d_in=d_1, d_out=d_2)
+
+    elif tipo == 2:
+        n2 = n0                     # exigido por M = n_N/n₀ = 1 (Ec. 112)
+        d_1 = zeta_0 + (n1 / n0) * (d_0 - zeta_0)    # Ec. 111/114
+        d_2 = zeta_1 + (n2 / n1) * (d_1 - zeta_1)    # Ec. 111/115
+        p0 = _gots_limite_O_cero(n0, n1, zeta_0, d_0)
+        p1 = _gots_limite_O_cero(n1, n2, zeta_1, d_1)
+        sup0 = dict(p0, n_in=n0, n_out=n1, d_in=d_0, d_out=d_1)
+        sup1 = dict(p1, n_in=n1, n_out=n2, d_in=d_1, d_out=d_2)
+
+    elif tipo == 3:
+        n2 = n0                     # exigido por M = n_N/n₀ = 1 (Ec. 112)
+        d_1 = zeta_0 + (n0 / n1) ** 2 * (d_0 - zeta_0)    # Ec. 121
+        d_2 = zeta_1 + (n1 / n2) ** 2 * (d_1 - zeta_1)    # Ec. 121
+        p0 = calcular_gots(n0, n1, zeta_0, d_0, d_1)
+        p1 = calcular_gots(n1, n2, zeta_1, d_1, d_2)
+        sup0 = dict(p0, n_in=n0, n_out=n1, d_in=d_0, d_out=d_1)
+        sup1 = dict(p1, n_in=n1, n_out=n2, d_in=d_1, d_out=d_2)
+
+    else:
+        raise ValueError(f"Tipo aplanático desconocido: {tipo} (use 0-3).")
+
+    # Aumento lateral M = ∏gₖ (Ec. 88-89), robusto para d₁ = ∞
+    if np.isinf(d_1):
+        M_lat = (n0 / n2) * (d_2 - zeta_1) / (d_0 - zeta_0)
+    else:
+        M_lat = ((n0 / n2) * (d_1 - zeta_0) * (d_2 - zeta_1)
+                 / ((d_0 - zeta_0) * (d_1 - zeta_1)))
+
+    return {
+        'tipo': tipo,
+        'n': (n0, n1, n2),
+        'zetas': (zeta_0, zeta_1),
+        'd': (d_0, d_1, d_2),
+        'magnificacion': M_lat,
+        'superficies': [sup0, sup1],
+    }
+
+
+def perfil_superficie_aplanatica(sup, r_max, N=500):
+    """Perfil meridional (r, z) de una superficie aplanática hasta r_max.
+
+    A diferencia de ``perfil_superficie``, el dominio de ρ se ajusta a la
+    apertura pedida (las superficies tipo 1-3 tienen dominio ilimitado y
+    un muestreo con tope fijo dejaría casi todos los nodos fuera de la
+    apertura). Las esferas (tipo 0) se muestrean por ángulo (exacto).
+
+    Args:
+        sup  : superficie de un diseño de ``disenar_aplanatica``
+        r_max: radio de apertura
+        N    : número de puntos
+
+    Returns:
+        (r_arr, z_arr) con r creciente desde 0 hasta ≈ r_max
+    """
+    r_max = float(r_max)
+    i    = np.arange(N)
+    cheb = 0.5 * (1.0 - np.cos(np.pi * i / (N - 1)))    # denso en extremos
+
+    if sup.get('esfera'):
+        R = float(sup['R'])
+        if r_max >= abs(R):
+            r_max = 0.999 * abs(R)
+        th_max = np.arcsin(r_max / abs(R))
+        th = th_max * cheb
+        r  = np.abs(R) * np.sin(th)
+        z  = sup['zeta'] + R * (1.0 - np.cos(th))
+        return r, z
+
+    # Dominio admisible del radical
+    coef_rad = 2.0 * sup['S'] - sup['O'] * sup['OG']
+    rho_dom  = (np.sqrt(-1.0 / coef_rad) * 0.999999
+                if coef_rad < -1e-15 else np.inf)
+
+    # ρ_hi tal que r(ρ_hi) ≥ r_max: iteración de punto fijo
+    # ρ² = r² + τ(ρ)² (converge en pocas iteraciones; τ varía suavemente)
+    rho_hi = r_max
+    for _ in range(80):
+        rho_hi = min(rho_hi, rho_dom)
+        tau    = float(_tau_de_rho(sup, rho_hi))
+        nuevo  = np.sqrt(r_max ** 2 + tau ** 2)
+        nuevo  = min(nuevo, rho_dom)
+        if abs(nuevo - rho_hi) < 1e-12 * max(1.0, rho_hi):
+            rho_hi = nuevo
+            break
+        rho_hi = nuevo
+
+    rho  = rho_hi * cheb
+    tau  = _tau_de_rho(sup, rho)
+    z    = sup['zeta'] + tau
+    r    = np.sqrt(np.maximum(rho ** 2 - tau ** 2, 0.0))
+
+    # Rama ascendente y recorte en r_max
+    dr       = np.diff(r)
+    idx_desc = np.where(dr < -1e-12)[0]
+    if len(idx_desc) > 0:
+        corte = idx_desc[0] + 1
+        r, z = r[:corte], z[:corte]
+    mask = r <= r_max * (1.0 + 1e-9)
+    return r[mask], z[mask]
+
+
+def alturas_estigmaticas(diseno, rho_0):
+    """ρ₁ del rayo que incide en la superficie 0 con parámetro ρ₀.
+
+    Encadena la geometría estigmática exacta: el rayo refractado por la
+    superficie 0 pasa (él o su prolongación) por el conjugado intermedio
+    (d₁, 0), lo que determina el punto de incidencia sobre la
+    superficie 1 sin necesidad de un trazador de rayos. Para d₁ = ∞
+    (tipo-1) el rayo interno viaja paralelo al eje a la altura r₀.
+
+    Args:
+        diseno: dict de ``disenar_aplanatica``
+        rho_0 : parámetro ρ del punto de incidencia sobre la superficie 0
+
+    Returns:
+        (rho_0, rho_1): parámetros de incidencia en ambas superficies
+    """
+    sup0, sup1 = diseno['superficies']
+    d_1 = diseno['d'][1]
+
+    def _punto(sup, rho):
+        if sup.get('esfera'):
+            R = float(sup['R'])
+            # ρ = distancia vértice-punto (cuerda): ρ = 2|R|·sin(θ/2)
+            th = 2.0 * np.arcsin(min(rho / (2.0 * abs(R)), 1.0))
+            return sup['zeta'] + R * (1.0 - np.cos(th)), abs(R) * np.sin(th)
+        tau = float(_tau_de_rho(sup, rho))
+        return sup['zeta'] + tau, np.sqrt(max(rho * rho - tau * tau, 0.0))
+
+    z0, r0 = _punto(sup0, rho_0)
+
+    if np.isinf(d_1):
+        # Rayo interno paralelo al eje: buscar ρ₁ con r₁(ρ₁) = r₀
+        f = lambda rho: _punto(sup1, rho)[1] - r0
+    else:
+        # P₁ alineado con (d₁,0) y P₀: cruce del producto vectorial
+        f = lambda rho: ((_punto(sup1, rho)[0] - d_1) * r0
+                         - _punto(sup1, rho)[1] * (z0 - d_1))
+
+    # Bracket por barrido geométrico + bisección
+    lo, f_lo = 0.0, f(0.0)
+    hi = None
+    paso = max(rho_0, 1e-3)
+    x = paso * 0.05
+    for _ in range(400):
+        f_x = f(x)
+        if f_x == 0.0:
+            return rho_0, x
+        if np.sign(f_x) != np.sign(f_lo):
+            hi = x
+            break
+        lo, f_lo = x, f_x
+        x *= 1.15
+    if hi is None:
+        raise ValueError("No se encontró la intersección con la segunda "
+                         "superficie (¿apertura excesiva?).")
+    for _ in range(200):
+        mid = 0.5 * (lo + hi)
+        if np.sign(f(mid)) == np.sign(f_lo):
+            lo = mid
+        else:
+            hi = mid
+    return rho_0, 0.5 * (lo + hi)
+
+
 # ── Conversión de perfil a path SVG ───────────────────────────────────────
 
 
@@ -461,6 +811,15 @@ def puntos_a_bezier_path_str(puntos_xy, cerrar=True):
 
     pts = [(float(x), float(y)) for x, y in puntos_xy]
 
+    # En un contorno cerrado el punto inicial no debe repetirse al final:
+    # la cuerda de cierre tendría longitud cero y su tangente de Bessel
+    # degeneraría (pliegue microscópico en el vértice que desvía los
+    # rayos axiales).
+    if cerrar and len(pts) > 2:
+        while len(pts) > 2 and math.hypot(pts[-1][0] - pts[0][0],
+                                          pts[-1][1] - pts[0][1]) < 1e-12:
+            pts.pop()
+
     # Decimación: eliminar puntos casi coincidentes.  El muestreo
     # Chebyshev produce segmentos de <1e-4 unidades en los extremos;
     # esos micro-segmentos no aportan geometría (la curvatura la
@@ -482,6 +841,14 @@ def puntos_a_bezier_path_str(puntos_xy, cerrar=True):
             filtrados[-1] = pts[-1]
         else:
             filtrados.append(pts[-1])
+        # en contornos cerrados, evitar que la cuerda de cierre quede
+        # microscópica (desestabilizaría la tangente de Bessel del
+        # punto inicial)
+        if cerrar:
+            while len(filtrados) > 2 and math.hypot(
+                    filtrados[-1][0] - filtrados[0][0],
+                    filtrados[-1][1] - filtrados[0][1]) < umbral:
+                filtrados.pop()
         pts = filtrados
 
     n = len(pts)

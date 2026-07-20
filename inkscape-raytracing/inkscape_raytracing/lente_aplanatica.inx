@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<inkscape-extension xmlns="http://www.inkscape.org/namespace/inkscape/extension">
+    <name>Lente Aplanática</name>
+    <id>damienBloch/inkscape-raytracing/lente_aplanatica</id>
+
+    <param name="tab" type="notebook">
+
+        <!-- ══ Tab 1: Diseño ════════════════════════════════════════════ -->
+        <page name="diseno" gui-text="Diseño aplanático">
+
+            <label appearance="header">Tipo de sistema rigurosamente aplanático</label>
+            <param name="tipo" type="enum" gui-text="Tipo (Silva-Lora §4.4):">
+                <item value="1">Tipo-1 — cónicas, interior colimado</item>
+                <item value="0">Tipo-0 — esferas en puntos de Young (anastigmática)</item>
+                <item value="2">Tipo-2 — vértices planos (O = 0), imagen virtual</item>
+                <item value="3">Tipo-3 — G = 0, menisco, imagen virtual</item>
+            </param>
+            <param name="rama" type="enum"
+                   gui-text="Rama (sólo tipo-1):">
+                <item value="real">biconvexa — imagen real (M = −1)</item>
+                <item value="virtual">menisco — imagen virtual (M = +1)</item>
+            </param>
+            <label>Todos los tipos son libres de aberración esférica y coma de
+manera exacta. La posición de la imagen d₂ queda determinada por el diseño
+y se marca con el círculo verde (hueco si la imagen es virtual).</label>
+
+            <separator/>
+            <label appearance="header">Índices de refracción</label>
+            <param name="n0" type="float" min="1.0" max="5.0" precision="4"
+                   gui-text="n₀  (espacio objeto, generalmente aire = 1):">1.0</param>
+            <param name="n1" type="float" min="1.0" max="5.0" precision="4"
+                   gui-text="n₁  (vidrio de la lente):">1.8</param>
+            <param name="n2" type="float" min="1.0" max="5.0" precision="4"
+                   gui-text="n₂  (espacio imagen; los tipos 1-3 fuerzan n₂ = n₀):">1.0</param>
+
+            <separator/>
+            <label appearance="header">Posiciones axiales</label>
+            <param name="zeta_0" type="float" min="-10000" max="10000" precision="3"
+                   gui-text="ζ₀  (vértice superficie frontal):">60.0</param>
+            <param name="zeta_1" type="float" min="-10000" max="10000" precision="3"
+                   gui-text="ζ₁  (vértice superficie trasera, &gt; ζ₀):">70.0</param>
+            <param name="d_objeto" type="float" min="-10000" max="10000" precision="3"
+                   gui-text="d₀  (punto objeto, debe ser &lt; ζ₀):">0.0</param>
+
+            <separator/>
+            <param name="unidad" type="enum" gui-text="Unidades:">
+                <item value="mm">mm</item>
+                <item value="cm">cm</item>
+                <item value="in">in</item>
+                <item value="px">px</item>
+            </param>
+
+        </page>
+
+        <!-- ══ Tab 2: Apertura, haz y pupila ════════════════════════════ -->
+        <page name="haz" gui-text="Apertura, Haz y Pupila">
+
+            <label appearance="header">Apertura de la lente</label>
+            <param name="r_apertura" type="float" min="0" max="10000" precision="3"
+                   gui-text="Radio de apertura r_max (0 = calcular automático):">0.0</param>
+
+            <separator/>
+            <label appearance="header">Haz de rayos desde el punto objeto</label>
+            <param name="n_rayos" type="int" min="1" max="51"
+                   gui-text="Número de rayos:">9</param>
+            <param name="angulo_max_deg" type="float" min="0.1" max="45" precision="2"
+                   gui-text="Ángulo máximo del haz (°):">8.0</param>
+
+            <separator/>
+            <label appearance="header">Pupila física (como en la tesis)</label>
+            <param name="mostrar_pupila" type="boolean"
+                   gui-text="Dibujar pupila (dos segmentos beam-dump)">false</param>
+            <param name="z_pupila" type="float" min="-10000" max="10000" precision="3"
+                   gui-text="Posición axial de la pupila:">55.0</param>
+            <param name="r_pupila" type="float" min="0.1" max="10000" precision="3"
+                   gui-text="Radio de la abertura:">10.0</param>
+
+            <separator/>
+            <label appearance="header">Elementos de visualización</label>
+            <param name="mostrar_eje" type="boolean"
+                   gui-text="Dibujar eje óptico">true</param>
+            <param name="mostrar_puntos" type="boolean"
+                   gui-text="Marcar puntos objeto e imagen">true</param>
+
+        </page>
+
+    </param>
+
+    <effect>
+        <object-type>all</object-type>
+        <effects-menu>
+            <submenu name="Optics"/>
+        </effects-menu>
+    </effect>
+
+    <script>
+        <command location="inx" interpreter="python">lente_aplanatica.py</command>
+    </script>
+
+</inkscape-extension>
