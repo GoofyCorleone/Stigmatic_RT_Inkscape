@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="428" viewBox="0 0 700 428">
+  <rect x="0.5" y="0.5" width="699.0" height="427.0" rx="8" fill="#f6f5f4" stroke="#c8c5c2" stroke-width="1"/>
+  <rect x="0.5" y="0.5" width="699.0" height="30.0" rx="8" fill="#e1dedb" stroke="#c8c5c2" stroke-width="1"/>
+  <rect x="0.5" y="22.0" width="699.0" height="8.0" rx="0" fill="#e1dedb"/>
+  <text x="350.0" y="19.5" font-family="Cantarell, DejaVu Sans, sans-serif" font-size="12.5" fill="#2e3436" font-weight="bold" text-anchor="middle">Superficie Cartesiana</text>
+  <path d="M 673,10.0 l 10,10 M 683,10.0 l -10,10" stroke="#6b6b6b" stroke-width="1.4" fill="none"/>
+  <rect x="16.0" y="33.0" width="133.6" height="25.0" rx="5" fill="#e1dedb" stroke="#c8c5c2" stroke-width="1"/>
+  <text x="82.8" y="49.0" font-family="Cantarell, DejaVu Sans, sans-serif" font-size="11.5" fill="#6b6b6b" font-weight="normal" text-anchor="middle">Parámetros Físicos</text>
+  <rect x="153.6" y="33.0" width="115.7" height="25.0" rx="5" fill="#e1dedb" stroke="#c8c5c2" stroke-width="1"/>
+  <text x="211.5" y="49.0" font-family="Cantarell, DejaVu Sans, sans-serif" font-size="11.5" fill="#6b6b6b" font-weight="normal" text-anchor="middle">Parámetros GOTS</text>
+  <rect x="273.3" y="33.0" width="79.8" height="25.0" rx="5" fill="#ffffff" stroke="#c8c5c2" stroke-width="1"/>
+  <rect x="279.3" y="33.0" width="67.8" height="2.5" rx="0" fill="#3584e4"/>
+  <text x="313.2" y="49.0" font-family="Cantarell, DejaVu Sans, sans-serif" font-size="11.5" fill="#2e3436" font-weight="bold" text-anchor="middle">Geometría</text>
+  <line x1="0.5" y1="58.0" x2="699.5" y2="58.0" stroke="#c8c5c2"/>
+  <text x="16.0" y="85.0" font-family="Cantarell, DejaVu Sans, sans-serif" font-size="10.5" fill="#6b6b6b" font-weight="normal" text-anchor="start">Esta extensión siempre dibuja el óvalo de Descartes cerrado</text>
+  <text x="16.0" y="100.0" font-family="Cantarell, DejaVu Sans, sans-serif" font-size="10.5" fill="#6b6b6b" font-weight="normal" text-anchor="start">completo. La pestaña «Geometría» sólo fija opciones de visualización.</text>
+  <text x="16.0" y="126.0" font-family="Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#2e3436" font-weight="normal" text-anchor="start">(parámetro obsoleto, ignorado):</text>
+  <rect x="469.0" y="113.0" width="215.0" height="20.0" rx="4" fill="#ffffff" stroke="#c8c5c2" stroke-width="1"/>
+  <text x="477.0" y="127.0" font-family="Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#2e3436" font-weight="normal" text-anchor="start">0.0</text>
+  <path d="M 668,120 l 4,-4 l 4,4 M 668,126 l 4,4 l 4,-4" stroke="#6b6b6b" stroke-width="1.2" fill="none"/>
+  <text x="16.0" y="152.0" font-family="Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#2e3436" font-weight="normal" text-anchor="start">Unidades:</text>
+  <rect x="469.0" y="139.0" width="215.0" height="20.0" rx="4" fill="#ffffff" stroke="#c8c5c2" stroke-width="1"/>
+  <text x="477.0" y="153.0" font-family="Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#2e3436" font-weight="normal" text-anchor="start">mm</text>
+  <path d="M 666,147 l 5,5 l 5,-5" stroke="#6b6b6b" stroke-width="1.3" fill="none"/>
+  <line x1="16" y1="168.0" x2="684" y2="168.0" stroke="#c8c5c2"/>
+  <text x="16.0" y="189.0" font-family="Cantarell, DejaVu Sans, sans-serif" font-size="11.5" fill="#2e3436" font-weight="bold" text-anchor="start">Elementos de visualización</text>
+  <rect x="16.0" y="205.0" width="15.0" height="15.0" rx="3" fill="#3584e4" stroke="#c8c5c2" stroke-width="1"/>
+  <path d="M 19.5,212.5 l 3,3 l 5,-6" stroke="#ffffff" stroke-width="2" fill="none"/>
+  <text x="40.0" y="217.0" font-family="Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#2e3436" font-weight="normal" text-anchor="start">Dibujar eje óptico</text>
+  <rect x="16.0" y="231.0" width="15.0" height="15.0" rx="3" fill="#3584e4" stroke="#c8c5c2" stroke-width="1"/>
+  <path d="M 19.5,238.5 l 3,3 l 5,-6" stroke="#ffffff" stroke-width="2" fill="none"/>
+  <text x="40.0" y="243.0" font-family="Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#2e3436" font-weight="normal" text-anchor="start">Marcar puntos objeto e imagen</text>
+  <line x1="16" y1="258.0" x2="684" y2="258.0" stroke="#c8c5c2"/>
+  <text x="16.0" y="279.0" font-family="Cantarell, DejaVu Sans, sans-serif" font-size="11.5" fill="#2e3436" font-weight="bold" text-anchor="start">Haz de rayos (sólo cuando se usa la pestaña Físico)</text>
+  <rect x="16.0" y="295.0" width="15.0" height="15.0" rx="3" fill="#3584e4" stroke="#c8c5c2" stroke-width="1"/>
+  <path d="M 19.5,302.5 l 3,3 l 5,-6" stroke="#ffffff" stroke-width="2" fill="none"/>
+  <text x="40.0" y="307.0" font-family="Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#2e3436" font-weight="normal" text-anchor="start">Generar haz de rayos desde el objeto</text>
+  <text x="16.0" y="332.0" font-family="Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#2e3436" font-weight="normal" text-anchor="start">Número de rayos:</text>
+  <rect x="469.0" y="319.0" width="215.0" height="20.0" rx="4" fill="#ffffff" stroke="#c8c5c2" stroke-width="1"/>
+  <text x="477.0" y="333.0" font-family="Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#2e3436" font-weight="normal" text-anchor="start">7</text>
+  <path d="M 668,326 l 4,-4 l 4,4 M 668,332 l 4,4 l 4,-4" stroke="#6b6b6b" stroke-width="1.2" fill="none"/>
+  <text x="16.0" y="358.0" font-family="Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#2e3436" font-weight="normal" text-anchor="start">Ángulo máximo del haz (°):</text>
+  <rect x="469.0" y="345.0" width="215.0" height="20.0" rx="4" fill="#ffffff" stroke="#c8c5c2" stroke-width="1"/>
+  <text x="477.0" y="359.0" font-family="Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#2e3436" font-weight="normal" text-anchor="start">10.0</text>
+  <path d="M 668,352 l 4,-4 l 4,4 M 668,358 l 4,4 l 4,-4" stroke="#6b6b6b" stroke-width="1.2" fill="none"/>
+  <line x1="0.5" y1="384.0" x2="699.5" y2="384.0" stroke="#c8c5c2"/>
+  <rect x="16.0" y="398.0" width="15.0" height="15.0" rx="3" fill="#ffffff" stroke="#c8c5c2" stroke-width="1"/>
+  <text x="40.0" y="410.0" font-family="Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#6b6b6b" font-weight="normal" text-anchor="start">Live preview</text>
+  <rect x="516.0" y="395.0" width="76.0" height="22.0" rx="5" fill="#3584e4" stroke="#c8c5c2" stroke-width="1"/>
+  <text x="554.0" y="410.0" font-family="Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#ffffff" font-weight="bold" text-anchor="middle">Apply</text>
+  <rect x="600.0" y="395.0" width="76.0" height="22.0" rx="5" fill="#ffffff" stroke="#c8c5c2" stroke-width="1"/>
+  <text x="638.0" y="410.0" font-family="Cantarell, DejaVu Sans, sans-serif" font-size="11" fill="#2e3436" font-weight="bold" text-anchor="middle">Close</text>
+</svg>
