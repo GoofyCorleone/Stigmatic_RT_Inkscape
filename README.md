@@ -128,7 +128,19 @@ git clone https://github.com/GoofyCorleone/Stigmatic_RT_Inkscape.git
 cd Stigmatic_RT_Inkscape
 ```
 
-Copy the **contents of** `inkscape-raytracing/inkscape_raytracing/` into that directory:
+**The easy way (Linux / macOS).** Run the bundled install script — it detects your
+extensions directory and copies everything for you:
+
+```bash
+./instalar.sh
+```
+
+Then restart Inkscape. Re-run it whenever you pull or edit the code: Inkscape only reads
+extensions from its user directory, and only at startup, so changes in this repository do
+**not** reach Inkscape until you copy them across again.
+
+**The manual way.** Copy the **contents of** `inkscape-raytracing/inkscape_raytracing/`
+into that directory:
 
 **Linux**
 ```bash
@@ -854,6 +866,7 @@ the table.
 
 ```
 README.md                          this page (full guide)
+instalar.sh                        copies the extensions into Inkscape (Linux/macOS)
 docs/
   img/                             dialog reference images used above
 generar_lsoe_svg.py                minimal standalone LSOE generator
