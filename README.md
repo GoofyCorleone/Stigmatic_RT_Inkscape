@@ -98,8 +98,56 @@ Every ray refracts at the lens surfaces, splits at the BS into transmitted/refle
 refracts through the glass slab on the transmitted arm (two parallel shifts), reflects
 off the fold mirror on the reflected arm, and finally terminates at a beam dump. The
 script `generar_ejemplos_avanzados.py` builds the scene and runs the canonical tracer
-without invoking Inkscape. The path is emitted as cubic Bézier arcs with Catmull–Rom tangents, which gives
-O(h⁴) approximation error and eliminates the focus drift that a polyline of `L` segments produces.
+without invoking Inkscape. The path is emitted as cubic Bézier arcs with non-uniform
+(Bessel) tangents, which gives O(h⁴) approximation error and eliminates the focus
+drift that a polyline of `L` segments produces.
+
+### Complete system (divergent + convergent LSOE + every primitive)
+
+The most complete example chains **two stigmatic lenses** — a divergent LSOE whose
+*virtual* image acts as the object of a convergent LSOE — before splitting the beam:
+
+```
+    fuente ─► LSOE divergente ─► LSOE convergente ─► BS (45°)
+                  (imagen virtual       (reenfoca)       │
+                   como objeto)                          ├─► vidrio n=1.5 ─► dump T
+                                                         └─► foco R ─► espejo ─► dump R
+```
+
+| Before | After (canonical engine) |
+|---|---|
+| ![Complete system](ejemplo_sistema_completo.svg) | ![Complete system traced](ejemplo_sistema_completo_traced.svg) |
+
+The divergent singlet (object at −60 mm, virtual image at −25 mm) feeds the
+convergent singlet, which refocuses at +110 mm. The 45° beam splitter divides the
+converging cone: the transmitted arm focuses at **foco T** (110, 0) and then crosses
+a glass slab before reaching its dump; the reflected arm focuses at **foco R**
+(70, 40) — the mirror image of foco T across the BS plane — and is folded by a 45°
+mirror into its own dump. Traced through the *actual* Inkscape extension
+(`render.py`), all 18 trajectories (9 rays × 2 arms) converge at both foci to
+within **0.011 mm**, confirming that rigorous stigmatism survives virtual-image
+chaining, beam splitting and mirror folding.
+
+### Numerical accuracy of the extension pipeline
+
+Three precision fixes make the in-Inkscape ray tracing agree with the canonical
+engine to ≈0.001° / a few µm at the focus:
+
+1. **Spline→Bézier handles.** The profile is converted with the exact non-uniform
+   (Bessel/Catmull–Rom) formula `P₁ = pᵢ + mᵢ·hᵢ/3`; the previous fixed-tension
+   handles were 2× too long and bulged the surface O(h²) between nodes.
+2. **inkex path precision.** `render.py` reads `d` attributes directly and raises
+   inkex's number template from `{:.6g}` to `{:.10g}`: the default 6-significant-digit
+   round-trip quantized coordinates to ~1e-3 px and corrupted the normals of fine
+   Bézier segments (refraction errors up to ~1°).
+3. **Point decimation.** Nearly coincident profile points (Chebyshev end clusters)
+   are merged before emitting the path, keeping the intersection solver well
+   conditioned.
+
+Additionally, traced beams are now drawn compensating the containing layer's
+transform (they were shifted when the layer had a `translate`), and beams outside an
+Inkscape layer fall back to a root-level `generated_beams` layer instead of being
+silently ignored.
 
 ---
 
@@ -261,6 +309,13 @@ to remember. The only rule:
 
 Use the **Parámetros Físicos** tab with both `d₀` and `d₁` negative (same side as the
 object) and `|d₁| < |d₀|`. Example (n₁=1, n₂=1.5, ζ=0):
+
+> **Note.** For a virtual image the Fermat invariant is the **difference** of optical
+> paths (`n₀·l₀ − n₁·l₁ = const`), not the sum; the generator selects the correct
+> branch of the Cartesian quartic automatically. In this configuration the element is
+> drawn as the designed concave cap closed by a rectangular glass body extending
+> toward +z (a full closed oval would sit between the object and the design surface
+> and would block the rays before they reach it).
 
 | Field | Value |
 |---|---|

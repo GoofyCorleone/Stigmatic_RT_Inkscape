@@ -21,6 +21,7 @@ from gots_util import (
     calcular_gots,
     perfil_ovoide_descartes,
     perfil_gots_oval_completo,
+    perfil_superficie,
     puntos_a_bezier_path_str,
 )
 
@@ -99,7 +100,7 @@ class SuperficieCartesiana(inkex.GenerateExtension):
             tiene_focos = False
         else:
             try:
-                calcular_gots(
+                params_fis = calcular_gots(
                     opts.n1, opts.n2, opts.zeta,
                     opts.d_objeto, opts.d_imagen,
                 )
@@ -111,10 +112,26 @@ class SuperficieCartesiana(inkex.GenerateExtension):
             d_obj_fis = opts.d_objeto
             d_img_fis = opts.d_imagen
             tiene_focos = True
+            if abs(opts.n1 - 1.0) > 1e-9:
+                inkex.utils.errormsg(
+                    "Aviso: el trazador de inkscape-raytracing supone que el\n"
+                    "medio exterior es aire (n = 1). Con n₁ ≠ 1 el trazado no\n"
+                    "coincidirá con el diseño estigmático."
+                )
 
-        # ── 2. Perfil meridional — óvalo completo ─────────────────────
+        # ¿Configuración divergente? (imagen virtual: d₁ < ζ). En tal caso el
+        # óvalo cerrado completo NO es utilizable: su tapa trasera quedaría
+        # entre el objeto y la superficie de diseño, y los rayos la golpearían
+        # primero. Se dibuja sólo la rama diseñada (vértice → ecuador) cerrada
+        # con un cuerpo de vidrio hacia +z (bloque plano-cóncavo).
+        divergente = (not modo_gots) and (opts.d_imagen < opts.zeta)
+
+        # ── 2. Perfil meridional ──────────────────────────────────────
         if modo_gots:
             zs, rs = perfil_gots_oval_completo(params, N=400)
+        elif divergente:
+            r_arr, z_arr = perfil_superficie(params_fis, N=400)
+            zs, rs = z_arr, r_arr          # rama diseñada: vértice → ecuador
         else:
             zs, rs = perfil_ovoide_descartes(
                 opts.n1, opts.n2, opts.zeta,
@@ -133,9 +150,26 @@ class SuperficieCartesiana(inkex.GenerateExtension):
         z_svg = np.array([self._sv(z - zeta_ref) for z in zs])
         r_svg = np.array([self._sv(r)             for r in rs])
 
-        puntos = [(float(z), -float(r)) for z, r in zip(z_svg, r_svg)]
-        for z, r in zip(z_svg[-2:0:-1], r_svg[-2:0:-1]):
-            puntos.append((float(z), float(r)))
+        if divergente:
+            # Rama cóncava diseñada + cuerpo rectangular de vidrio hacia +z.
+            # Profundidad suficiente para que los rayos divergentes sigan en
+            # vidrio dentro de la zona de interés (salen del lienzo antes de
+            # alcanzar la cara de salida).
+            prof  = 1.5 * abs(opts.zeta - opts.d_objeto)
+            z_far = self._sv(opts.zeta - zeta_ref + prof)
+            R     = float(r_svg[-1]) + 0.6 * float(self._sv(prof))
+            # mitad superior: vértice → ecuador (y = −r)
+            puntos = [(float(z), -float(r)) for z, r in zip(z_svg, r_svg)]
+            # cara de salida (lejana) y retorno por la mitad inferior
+            # (sin repetir el vértice: 'Z' cierra el contorno)
+            puntos.append((float(z_far), -R))
+            puntos.append((float(z_far),  R))
+            for z, r in zip(z_svg[:0:-1], r_svg[:0:-1]):
+                puntos.append((float(z), float(r)))
+        else:
+            puntos = [(float(z), -float(r)) for z, r in zip(z_svg, r_svg)]
+            for z, r in zip(z_svg[-2:0:-1], r_svg[-2:0:-1]):
+                puntos.append((float(z), float(r)))
 
         ovalo = inkex.PathElement()
         ovalo.style = self.style

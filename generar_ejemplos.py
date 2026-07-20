@@ -44,12 +44,18 @@ def yc(r):        return -px(r)        # r>0 arriba del eje óptico
 def svg_header(xmin, xmax, ymin, ymax):
     w = xmax - xmin
     h = ymax - ymin
+    # El grupo raíz se marca como capa de Inkscape para que la extensión
+    # Ray Tracing pueda insertar los haces generados (exige que los
+    # elementos beam estén dentro de una capa).
     return (
         f'<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n'
-        f'<svg xmlns="http://www.w3.org/2000/svg" version="1.1" '
+        f'<svg xmlns="http://www.w3.org/2000/svg" '
+        f'xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" '
+        f'version="1.1" '
         f'width="{w:.2f}" height="{h:.2f}" '
         f'viewBox="0 0 {w:.2f} {h:.2f}">\n'
-        f'  <g transform="translate({-xmin:.3f},{-ymin:.3f})">\n'
+        f'  <g inkscape:groupmode="layer" inkscape:label="Capa 1" '
+        f'id="layer1" transform="translate({-xmin:.3f},{-ymin:.3f})">\n'
     )
 
 

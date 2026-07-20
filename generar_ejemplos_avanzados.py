@@ -50,12 +50,18 @@ def px(v):
 def svg_header(xmin, xmax, ymin, ymax):
     w = xmax - xmin
     h = ymax - ymin
+    # El grupo raíz se marca como capa de Inkscape para que la extensión
+    # Ray Tracing pueda insertar los haces generados (exige que los
+    # elementos beam estén dentro de una capa).
     return (
         '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n'
-        f'<svg xmlns="http://www.w3.org/2000/svg" version="1.1" '
+        f'<svg xmlns="http://www.w3.org/2000/svg" '
+        f'xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" '
+        f'version="1.1" '
         f'width="{w:.2f}" height="{h:.2f}" '
         f'viewBox="0 0 {w:.2f} {h:.2f}">\n'
-        f'  <g transform="translate({-xmin:.3f},{-ymin:.3f})">\n'
+        f'  <g inkscape:groupmode="layer" inkscape:label="Capa 1" '
+        f'id="layer1" transform="translate({-xmin:.3f},{-ymin:.3f})">\n'
     )
 
 
@@ -96,8 +102,10 @@ def texto(x, y, s, size=8, anchor="middle", color="#333"):
 def _contorno_lsoe(p0, p1, r_ap, xshift):
     """Construye el contorno cerrado (en coords SVG) de una LSOE en Inkscape
     con el vértice frontal desplazado ``xshift`` mm hacia la derecha."""
-    r0, z0 = perfil_superficie(p0, N=600, r_max=r_ap)
-    r1, z1 = perfil_superficie(p1, N=600, r_max=r_ap)
+    # N alto: la 2ª lente del colimador trabaja con un conjugado muy corto
+    # (≈10 mm) que amplifica cualquier error de interpolación del perfil.
+    r0, z0 = perfil_superficie(p0, N=2000, r_max=r_ap)
+    r1, z1 = perfil_superficie(p1, N=2000, r_max=r_ap)
 
     def X(z):  return px(z + xshift)
     def Yu(r): return -px(r)
@@ -438,6 +446,200 @@ def generar_experimento(out_path, traced=False):
     print(f"{out_path}  (traced={traced})")
 
 
+# ──────── Ejemplo 3 — Sistema completo: divergente + convergente + todo ─────
+
+def generar_sistema_completo(out_path, traced=False):
+    """Tren óptico con TODOS los primitivos de la extensión en un solo paso:
+
+        fuente ─► LSOE divergente ─► LSOE convergente ─► BS (45°)
+                       (imagen virtual        (reenfoca)      │
+                        como objeto)                          ├─► vidrio ─► dump T
+                                                              └─► foco R ─► espejo ─► dump R
+
+    La lente divergente forma una imagen virtual que actúa como objeto de
+    la convergente (encadenamiento estigmático riguroso); el BS divide el
+    haz convergente en dos brazos que enfocan en el punto imagen real
+    (brazo T) y en su especular respecto al plano del BS (brazo R).
+    """
+    N0, N1, N2 = 1.0, 1.6, 1.0
+    SIGMA      = 0.0
+
+    # ── L1: LSOE divergente (objeto real → imagen virtual) ──
+    Z0a, Z1a = 0.0, 5.0
+    D0a, D2a = -60.0, -25.0          # imagen virtual entre objeto y lente
+    d1a  = calcular_d1_sigma(SIGMA, Z0a, Z1a, D0a, D2a, N0, N1, N2)
+    p0a  = calcular_gots(N0, N1, Z0a, D0a, d1a)
+    p1a  = calcular_gots(N1, N2, Z1a, d1a, D2a)
+    r_apa = min(encontrar_apertura(p0a, p1a) * 0.75, 9.0)
+
+    # ── L2: LSOE convergente (objeto = imagen virtual de L1) ──
+    Z0b, Z1b = 30.0, 40.0
+    D0b, D2b = D2a, 110.0            # imagen real en z = 110
+    d1b  = calcular_d1_sigma(SIGMA, Z0b, Z1b, D0b, D2b, N0, N1, N2)
+    p0b  = calcular_gots(N0, N1, Z0b, D0b, d1b)
+    p1b  = calcular_gots(N1, N2, Z1b, d1b, D2b)
+    r_apb = min(encontrar_apertura(p0b, p1b) * 0.75, 16.0)
+
+    lens1_geo, lens1_contorno = _oval_lsoe_bezier(p0a, p1a, r_apa, xshift=0.0)
+    lens2_geo, lens2_contorno = _oval_lsoe_bezier(p0b, p1b, r_apb, xshift=0.0)
+
+    # ── BS a 45° en (70, 0): rayo +x se refleja hacia +y (abajo en SVG) ──
+    # El rayo marginal (−5°) cruza la recta del BS a y≈−7.0 mm: la
+    # semidiagonal debe superar ese valor (L/2√2 > 7) o el rayo no se divide.
+    X_BS, L_BS = 70.0, 23.0
+    d_bs = L_BS / 2.0 / np.sqrt(2.0)
+    BS_A = (X_BS - d_bs, -d_bs)
+    BS_B = (X_BS + d_bs, +d_bs)
+    bs_geo = _segmento_bezier(BS_A, BS_B)
+
+    # Imagen del brazo reflejado: especular de (110, 0) respecto a la
+    # recta del BS (pasa por (70,0), dirección (1,1)/√2) → (70, 40).
+    IMG_T = (D2b, 0.0)
+    IMG_R = (X_BS, D2b - X_BS)
+
+    # ── Bloque de vidrio en el brazo transmitido (tras el foco T) ──
+    GX0, GX1 = 120.0, 140.0
+    GY0, GY1 = -11.0, +11.0
+    glass_corners = [(GX0, GY0), (GX1, GY0), (GX1, GY1), (GX0, GY1)]
+    glass_geo = CompoundGeometricObject([
+        _segmento_bezier(glass_corners[i],
+                         glass_corners[(i + 1) % 4]) for i in range(4)
+    ])
+
+    # ── Espejo pliegue tras el foco R: redirige +y → +x ──
+    Y_FOLD = IMG_R[1] + 15.0
+    L_FOLD = 14.0
+    df = L_FOLD / 2.0 / np.sqrt(2.0)
+    FOLD_A = (X_BS - df, Y_FOLD - df)
+    FOLD_B = (X_BS + df, Y_FOLD + df)
+    fold_geo = _segmento_bezier(FOLD_A, FOLD_B)
+
+    # ── Beam dumps ──
+    X_DUMP_T = 165.0
+    DT_A, DT_B = (X_DUMP_T, -14.0), (X_DUMP_T, +14.0)
+    dump_t_geo = _segmento_bezier(DT_A, DT_B)
+    X_DUMP_R = 130.0
+    DR_A, DR_B = (X_DUMP_R, Y_FOLD - 14.0), (X_DUMP_R, Y_FOLD + 14.0)
+    dump_r_geo = _segmento_bezier(DR_A, DR_B)
+
+    # ── Mundo ──
+    world = World()
+    world.add(OpticalObject(lens1_geo,  Glass(N1)))
+    world.add(OpticalObject(lens2_geo,  Glass(N1)))
+    world.add(OpticalObject(bs_geo,     BeamSplitter()))
+    world.add(OpticalObject(glass_geo,  Glass(1.5)))
+    world.add(OpticalObject(fold_geo,   Mirror()))
+    world.add(OpticalObject(dump_t_geo, BeamDump()))
+    world.add(OpticalObject(dump_r_geo, BeamDump()))
+
+    N_RAYOS = 9
+    angs = np.linspace(-radians(5.0), radians(5.0), N_RAYOS)
+    fuente = Vector(D0a, 0.0)
+
+    # ── Encuadre ──
+    xmin = px(D0a - 8.0);      xmax = px(X_DUMP_T + 10.0)
+    ymin = px(-r_apb - 12.0);  ymax = px(Y_FOLD + 18.0)
+
+    out = svg_header(xmin, xmax, ymin, ymax)
+    out += linea(px(D0a - 5), 0, px(X_DUMP_T + 5), 0,
+                 color="#aaaaaa", sw=0.4, dash="6,3")
+
+    # Lentes
+    for contorno, etiqueta, zx in [
+        (lens1_contorno, "LSOE divergente",  Z0a + 2.5),
+        (lens2_contorno, "LSOE convergente", Z0b + 5.0),
+    ]:
+        pts_svg = [(px(x), px(y)) for (x, y) in contorno]
+        out += (f'    <path d="{path_str(pts_svg)}" '
+                f'style="fill:#b7c2dd;fill-opacity:0.7;stroke:#000;'
+                f'stroke-width:0.6px;stroke-linejoin:round">'
+                f'<desc>optics:glass:{N1:.4f}</desc></path>\n')
+        out += texto(px(zx), px(-r_apb - 6.0), etiqueta, size=6)
+
+    # Beam splitter
+    out += (f'    <path d="M {px(BS_A[0]):.3f},{px(BS_A[1]):.3f} '
+            f'L {px(BS_B[0]):.3f},{px(BS_B[1]):.3f}" '
+            f'style="fill:none;stroke:#4488aa;stroke-width:1.3px">'
+            f'<desc>optics:beam_splitter</desc></path>\n')
+    out += texto(px(X_BS + 8), px(-9), "BS 45°", size=6,
+                 anchor="start", color="#4488aa")
+
+    # Vidrio
+    gpts = [(px(x), px(y)) for (x, y) in glass_corners]
+    out += (f'    <path d="M {gpts[0][0]:.3f},{gpts[0][1]:.3f} '
+            f'L {gpts[1][0]:.3f},{gpts[1][1]:.3f} '
+            f'L {gpts[2][0]:.3f},{gpts[2][1]:.3f} '
+            f'L {gpts[3][0]:.3f},{gpts[3][1]:.3f} Z" '
+            f'style="fill:#c8e0f0;fill-opacity:0.5;stroke:#3355aa;'
+            f'stroke-width:0.6px"><desc>optics:glass:1.5</desc></path>\n')
+    out += texto(px((GX0 + GX1) / 2), px(GY0 - 3), "vidrio n=1.5",
+                 size=5, color="#3355aa")
+
+    # Espejo pliegue
+    out += (f'    <path d="M {px(FOLD_A[0]):.3f},{px(FOLD_A[1]):.3f} '
+            f'L {px(FOLD_B[0]):.3f},{px(FOLD_B[1]):.3f}" '
+            f'style="fill:none;stroke:#aa3377;stroke-width:1.4px">'
+            f'<desc>optics:mirror</desc></path>\n')
+    out += texto(px(X_BS - 10), px(Y_FOLD + 10), "M (pliegue)",
+                 size=6, color="#aa3377", anchor="end")
+
+    # Beam dumps
+    for (A, B, label, tx, ty) in [
+        (DT_A, DT_B, "dump T", px(X_DUMP_T + 3), px(0)),
+        (DR_A, DR_B, "dump R", px(X_DUMP_R + 3), px(Y_FOLD)),
+    ]:
+        out += (f'    <path d="M {px(A[0]):.3f},{px(A[1]):.3f} '
+                f'L {px(B[0]):.3f},{px(B[1]):.3f}" '
+                f'style="fill:none;stroke:#222;stroke-width:2.0px">'
+                f'<desc>optics:beam_dump</desc></path>\n')
+        out += texto(tx, ty, label, size=5, color="#222", anchor="start")
+
+    # Fuente, imagen virtual y focos
+    out += circulo(px(D0a), 0, px(1.5), fill="#dd2200")
+    out += texto(px(D0a), px(-5.0), "fuente", size=6, color="#aa2200")
+    out += (f'    <circle cx="{px(D2a):.3f}" cy="0" r="{px(1.5):.3f}" '
+            f'style="fill:none;stroke:#dd8800;stroke-width:0.7px;'
+            f'stroke-dasharray:1.5,1"/>\n')
+    out += texto(px(D2a), px(-5.0), "img. virtual", size=5, color="#dd8800")
+    out += circulo(px(IMG_T[0]), px(IMG_T[1]), px(1.5), fill="#00aa33")
+    out += texto(px(IMG_T[0]), px(-5.0), "foco T", size=5, color="#008833")
+    out += circulo(px(IMG_R[0]), px(IMG_R[1]), px(1.5), fill="#00aa33")
+    out += texto(px(IMG_R[0] - 4), px(IMG_R[1]), "foco R", size=5,
+                 color="#008833", anchor="end")
+
+    if not traced:
+        for th in angs:
+            xe = px(D0a) + px(22.0) * cos(th)
+            ye = px(22.0) * sin(th)
+            out += (f'    <path d="M {px(D0a):.3f},0 L {xe:.3f},{ye:.3f}" '
+                    f'style="fill:none;stroke:#ff6600;stroke-width:1px">'
+                    f'<desc>optics:beam</desc></path>\n')
+    else:
+        world.max_recursion_depth = 40
+        for th in angs:
+            seed = Ray(fuente, UnitVector(cos(th), sin(th)))
+            beams = world.propagate_beams(seed)
+            for beam in beams:
+                if not beam:
+                    continue
+                p0 = beam[0].origin
+                d_path = f"M {px(p0.x):.3f},{px(p0.y):.3f}"
+                for ray in beam:
+                    travel = ray.travel if ray.travel > 0 else 30.0
+                    p1 = ray.origin + travel * ray.direction
+                    if not (np.isfinite(p1.x) and np.isfinite(p1.y)):
+                        break
+                    d_path += f" L {px(p1.x):.3f},{px(p1.y):.3f}"
+                out += (f'    <path d="{d_path}" '
+                        f'style="fill:none;stroke:#ff6600;stroke-width:0.7px;'
+                        f'opacity:0.85"/>\n')
+
+    out += svg_footer()
+    with open(out_path, "w") as f:
+        f.write(out)
+    print(f"{out_path}  (traced={traced})")
+
+
 # ──────────────────────────────── main ──────────────────────────────────────
 
 if __name__ == "__main__":
@@ -445,3 +647,5 @@ if __name__ == "__main__":
     generar_colimador(os.path.join(AQUI, "ejemplo_colimador_traced.svg"),  traced=True)
     generar_experimento(os.path.join(AQUI, "ejemplo_experimento.svg"),         traced=False)
     generar_experimento(os.path.join(AQUI, "ejemplo_experimento_traced.svg"),  traced=True)
+    generar_sistema_completo(os.path.join(AQUI, "ejemplo_sistema_completo.svg"),        traced=False)
+    generar_sistema_completo(os.path.join(AQUI, "ejemplo_sistema_completo_traced.svg"), traced=True)

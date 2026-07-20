@@ -6,3 +6,5 @@ venv/
 .DS_Store
 *.swp
 render_stderr.txt
+CLAUDE.md
+TesisAlbertoDoc.pdf

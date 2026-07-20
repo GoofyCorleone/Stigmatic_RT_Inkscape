@@ -18,6 +18,16 @@ from raytracing.geometry import CubicBezier, CompoundGeometricObject
 from raytracing.geometry import GeometricObject
 from utils import pairwise
 
+# inkex serializa los números de un path con {:.6g} (6 cifras
+# significativas).  Para documentos grandes eso cuantiza las coordenadas
+# a ~1e-3 px y corrompe las normales de los segmentos Bézier finos
+# (errores de refracción de hasta ~1°).  Subimos la precisión global.
+try:
+    from inkex.paths.interfaces import PathCommand as _PathCommand
+    _PathCommand.number_template = "{:.10g}"
+except ImportError:  # versiones antiguas de inkex
+    pass
+
 
 @dataclass
 class BeamSeed:
@@ -54,6 +64,10 @@ def plot_beam(beam: list[Ray], node: inkex.ShapeElement, layer: inkex.Layer):
     element = layer.add(inkex.PathElement())
     element.style = node.specified_style()
     element.path = path
+    # Las coordenadas del trazado son absolutas (documento); si la capa
+    # contenedora tiene un transform heredado hay que compensarlo para que
+    # los haces se dibujen en el lugar correcto.
+    element.transform = -layer.composed_transform()
 
 
 class Raytracing(inkex.EffectExtension):
@@ -94,12 +108,14 @@ class Raytracing(inkex.EffectExtension):
                     generated = self.world.propagate_beams(seed.ray)
                     for beam in generated:
                         try:
-                            new_layer = get_or_create_beam_layer(
-                                get_containing_layer(seed.parent)
-                            )
-                            plot_beam(beam, seed.parent, new_layer)
-                        except LayerError as e:
-                            inkex.utils.errormsg(f"{e} It will be ignored.")
+                            contenedor = get_containing_layer(seed.parent)
+                        except LayerError:
+                            # El haz no está dentro de una capa de Inkscape
+                            # (p. ej. SVG generado externamente): usar el
+                            # documento raíz como contenedor.
+                            contenedor = self.svg
+                        new_layer = get_or_create_beam_layer(contenedor)
+                        plot_beam(beam, seed.parent, new_layer)
 
     @singledispatchmethod
     def add(self, obj):
@@ -239,7 +255,12 @@ def get_geometry(obj: inkex.ShapeElement) -> GeometricObject:
 
 
 def get_absolute_path(obj: inkex.ShapeElement) -> inkex.CubicSuperPath:
-    path = obj.to_path_element().path.to_absolute()
+    # to_path_element() re-serializa las coordenadas (pérdida de precisión);
+    # para un PathElement leemos su atributo d directamente.
+    if isinstance(obj, inkex.PathElement):
+        path = obj.path.to_absolute()
+    else:
+        path = obj.to_path_element().path.to_absolute()
     transformed_path = path.transform(obj.composed_transform())
     return transformed_path.to_superpath()
 

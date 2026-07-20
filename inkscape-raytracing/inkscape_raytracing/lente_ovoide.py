@@ -71,6 +71,13 @@ class LenteOvoide(inkex.GenerateExtension):
     def generate(self):
         opts = self.options
 
+        if abs(opts.n0 - 1.0) > 1e-9 or abs(opts.n2 - 1.0) > 1e-9:
+            inkex.utils.errormsg(
+                "Aviso: el trazador de inkscape-raytracing supone que el medio\n"
+                "exterior es aire (n = 1). Con n₀ ≠ 1 o n₂ ≠ 1 el trazado no\n"
+                "coincidirá con el diseño estigmático de la lente."
+            )
+
         # ── 1. Calcular d₁ desde σ ───────────────────────────────────────
         try:
             d_1 = calcular_d1_sigma(

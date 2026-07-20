@@ -75,10 +75,18 @@ def _tau_de_rho(params, rho):
 def perfil_ovoide_descartes(n0, n1, zeta, d_obj, d_img, N=400):
     """Contorno cerrado del óvalo de Descartes definido por
 
-        n₀·|P−F₀| + n₁·|P−F₁| = k ,
+        m₀·|P−F₀| + m₁·|P−F₁| = k ,   m₀ = ±n₀,  m₁ = ±n₁,
 
     donde F₀=(d_obj,0), F₁=(d_img,0) y k se fija pasando por el vértice
     (ζ, 0). Esta es la cuártica exacta del óvalo refractante.
+
+    Los signos de m₀ y m₁ codifican la naturaleza real o virtual de los
+    focos (propagación hacia +z):
+      objeto real   (d_obj < ζ) → m₀ = +n₀ ;  objeto virtual → m₀ = −n₀
+      imagen real   (d_img > ζ) → m₁ = +n₁ ;  imagen virtual → m₁ = −n₁
+    Para imagen virtual el invariante de Fermat es la DIFERENCIA de
+    caminos ópticos (n₀·l₀ − n₁·l₁ = cte), no la suma; usar siempre la
+    suma produce una superficie no estigmática.
 
     Args:
         n0, n1         : índices de refracción a cada lado de la superficie
@@ -95,17 +103,21 @@ def perfil_ovoide_descartes(n0, n1, zeta, d_obj, d_img, N=400):
     n0 = float(n0); n1 = float(n1)
     zeta = float(zeta); d_obj = float(d_obj); d_img = float(d_img)
 
-    k = n0 * abs(zeta - d_obj) + n1 * abs(zeta - d_img)
+    # Índices con signo según foco real/virtual (propagación hacia +z)
+    m0 = n0 if d_obj < zeta else -n0
+    m1 = n1 if d_img > zeta else -n1
 
-    # Raíces axiales: z tal que n₀|z−d_obj| + n₁|z−d_img| = k.
+    k = m0 * abs(zeta - d_obj) + m1 * abs(zeta - d_img)
+
+    # Raíces axiales: z tal que m₀|z−d_obj| + m₁|z−d_img| = k.
     # Resolución por regímenes de signos.
     raices = []
     for s0 in (+1.0, -1.0):
         for s1 in (+1.0, -1.0):
-            denom = n0 * s0 + n1 * s1
+            denom = m0 * s0 + m1 * s1
             if abs(denom) < 1e-30:
                 continue
-            z_c = (k + n0 * s0 * d_obj + n1 * s1 * d_img) / denom
+            z_c = (k + m0 * s0 * d_obj + m1 * s1 * d_img) / denom
             # Verificar consistencia de signos
             if (z_c - d_obj) * s0 >= -1e-6 and (z_c - d_img) * s1 >= -1e-6:
                 if not any(abs(z_c - r) < 1e-6 for r in raices):
@@ -137,6 +149,9 @@ def perfil_ovoide_descartes(n0, n1, zeta, d_obj, d_img, N=400):
     for i, z in enumerate(zs):
         a = z - d_obj
         b = z - d_img
+        # La cuadrática sólo depende de n₀², n₁² y k² (al elevar al
+        # cuadrado se funden las dos ramas del óvalo); los signos de
+        # m₀, m₁ actúan al seleccionar la raíz correcta más abajo.
         Nc = n0 * n0 * a * a - n1 * n1 * b * b - k * k
         Q2 = 4.0 * k * k * n1 * n1
 
@@ -156,15 +171,15 @@ def perfil_ovoide_descartes(n0, n1, zeta, d_obj, d_img, N=400):
         u1 = (-Bq + sd) / (2.0 * M * M)
         u2 = (-Bq - sd) / (2.0 * M * M)
 
-        # Elegir la raíz ≥ 0 que satisface n₀√(a²+u) + n₁√(b²+u) = k
+        # Elegir la raíz ≥ 0 que satisface m₀√(a²+u) + m₁√(b²+u) = k
         mejor_u  = 0.0
         mejor_er = float('inf')
         for u in (u1, u2):
             if u < -1e-9:
                 continue
             uu = max(u, 0.0)
-            err = abs(n0 * np.sqrt(a * a + uu)
-                      + n1 * np.sqrt(b * b + uu) - k)
+            err = abs(m0 * np.sqrt(a * a + uu)
+                      + m1 * np.sqrt(b * b + uu) - k)
             if err < mejor_er:
                 mejor_er = err
                 mejor_u  = uu
@@ -419,68 +434,118 @@ def calcular_d1_sigma(sigma, zeta_0, zeta_1, d_0, d_2, n_0, n_1, n_2):
 # ── Conversión de perfil a path SVG ───────────────────────────────────────
 
 
-def puntos_a_bezier_path_str(puntos_xy, cerrar=True, tension=1.0 / 3.0):
+def puntos_a_bezier_path_str(puntos_xy, cerrar=True):
     """Convierte una secuencia de puntos (x, y) en un path SVG de curvas
-    cúbicas Bézier (`M ... C ... C ... Z`) que aproxima la curva suave
-    que los une.  Las tangentes se estiman por diferencias centradas
-    (spline de Catmull–Rom con tensión=1/3, equivalente al cubic
-    cardinal spline estándar).
+    cúbicas Bézier (`M ... C ... C ... Z`) que interpola la curva suave
+    que los une.
 
-    El ray-tracer de Inkscape representa cada segmento como un Bézier
-    cúbico, de modo que un path explícitamente Bézier se aproxima a la
-    superficie continua con error O(h⁴) en la longitud de segmento —
-    mucho mejor que los O(h²) de los segmentos rectos `L`, eliminando
-    casi por completo el desplazamiento del foco debido al muestreo.
+    Las tangentes se estiman con la fórmula de Bessel para nodos NO
+    uniformes (mezcla de las pendientes de cuerda ponderada por las
+    longitudes de cuerda adyacentes) y los handles Bézier del segmento
+    [pᵢ, pⱼ] son  P₁ = pᵢ + mᵢ·hᵢ/3  y  P₂ = pⱼ − mⱼ·hᵢ/3, que es la
+    conversión exacta spline→Bézier.  Esto da error O(h⁴) real incluso
+    con muestreo Chebyshev (muy no uniforme en los extremos), a
+    diferencia de la versión anterior con diferencias centradas y
+    tensión fija, cuyos handles resultaban el doble de largos y
+    producían un abombamiento O(h²) entre nodos (y con él un
+    desplazamiento medible del foco).
 
     Args:
         puntos_xy: lista o array (N, 2)
         cerrar   : si True añade 'Z' y usa tangentes periódicas
-        tension  : factor de mano del handle Bézier (1/3 = aproximación
-                   óptima para arcos suaves).
 
     Returns:
         str con el path SVG
     """
+    import math
+
     pts = [(float(x), float(y)) for x, y in puntos_xy]
+
+    # Decimación: eliminar puntos casi coincidentes.  El muestreo
+    # Chebyshev produce segmentos de <1e-4 unidades en los extremos;
+    # esos micro-segmentos no aportan geometría (la curvatura la
+    # capturan los handles) y desestabilizan el solver de intersección
+    # del trazador (tolerancias absolutas ~1e-8 sobre coeficientes que
+    # escalan con h³).
+    if len(pts) > 2:
+        L_tot = sum(math.hypot(b[0] - a[0], b[1] - a[1])
+                    for a, b in zip(pts[:-1], pts[1:]))
+        umbral = max(L_tot * 1e-4, 1e-9)
+        filtrados = [pts[0]]
+        for p in pts[1:-1]:
+            q = filtrados[-1]
+            if math.hypot(p[0] - q[0], p[1] - q[1]) >= umbral:
+                filtrados.append(p)
+        # conservar el último punto siempre (extremo de la rama)
+        q = filtrados[-1]
+        if math.hypot(pts[-1][0] - q[0], pts[-1][1] - q[1]) < umbral:
+            filtrados[-1] = pts[-1]
+        else:
+            filtrados.append(pts[-1])
+        pts = filtrados
+
     n = len(pts)
     if n == 0:
         return ""
     if n == 1:
-        return f"M {pts[0][0]:.5f},{pts[0][1]:.5f}"
+        return f"M {pts[0][0]:.9f},{pts[0][1]:.9f}"
     if n == 2:
-        return (f"M {pts[0][0]:.5f},{pts[0][1]:.5f} "
-                f"L {pts[1][0]:.5f},{pts[1][1]:.5f}"
+        return (f"M {pts[0][0]:.9f},{pts[0][1]:.9f} "
+                f"L {pts[1][0]:.9f},{pts[1][1]:.9f}"
                 + (" Z" if cerrar else ""))
 
-    # Tangentes (dx_i, dy_i) por diferencia central.  Para curvas cerradas se
-    # toman índices módulo n; para abiertas se usan diferencias hacia delante
-    # en los extremos.
-    tx = [0.0] * n
-    ty = [0.0] * n
+    # Cuerdas h_i = |p_{i+1} − p_i| (con envolvente si es cerrada) y
+    # pendientes de cuerda d_i = (p_{i+1} − p_i)/h_i.
+    n_seg = n if cerrar else n - 1
+    h = [0.0] * n_seg
+    d = [(0.0, 0.0)] * n_seg
+    for i in range(n_seg):
+        j = (i + 1) % n
+        dx = pts[j][0] - pts[i][0]
+        dy = pts[j][1] - pts[i][1]
+        h[i] = math.hypot(dx, dy)
+        if h[i] > 1e-30:
+            d[i] = (dx / h[i], dy / h[i])
+
+    # Tangentes de Bessel: m_i = (h_i·d_{i−1} + h_{i−1}·d_i)/(h_{i−1}+h_i)
+    m = [(0.0, 0.0)] * n
     for i in range(n):
         if cerrar:
-            ip = (i + 1) % n
-            im = (i - 1) % n
+            i0 = (i - 1) % n_seg
+            i1 = i % n_seg
         else:
-            ip = min(i + 1, n - 1)
-            im = max(i - 1, 0)
-        tx[i] = pts[ip][0] - pts[im][0]
-        ty[i] = pts[ip][1] - pts[im][1]
+            if i == 0 or i == n - 1:
+                continue        # extremos: después
+            i0 = i - 1
+            i1 = i
+        hs = h[i0] + h[i1]
+        if hs < 1e-30:
+            continue
+        m[i] = ((h[i1] * d[i0][0] + h[i0] * d[i1][0]) / hs,
+                (h[i1] * d[i0][1] + h[i0] * d[i1][1]) / hs)
 
-    partes = [f"M {pts[0][0]:.5f},{pts[0][1]:.5f}"]
-    ult = n if cerrar else n - 1
-    for i in range(ult):
+    if not cerrar:
+        # Extremos abiertos: extrapolación parabólica m₀ = 2d₀ − m₁
+        m[0] = (2.0 * d[0][0] - m[1][0], 2.0 * d[0][1] - m[1][1])
+        m[n - 1] = (2.0 * d[n_seg - 1][0] - m[n - 2][0],
+                    2.0 * d[n_seg - 1][1] - m[n - 2][1])
+
+    # 9 decimales: con muestreo denso los segmentos pueden medir ~1e-4
+    # unidades y el redondeo de las coordenadas contaminaría las
+    # tangentes (y con ellas las normales de refracción).
+    partes = [f"M {pts[0][0]:.9f},{pts[0][1]:.9f}"]
+    for i in range(n_seg):
         j = (i + 1) % n
         p0x, p0y = pts[i]
         p3x, p3y = pts[j]
-        # Handles: P1 = P0 + τ·T_i ; P2 = P3 − τ·T_j
-        p1x = p0x + tension * tx[i]
-        p1y = p0y + tension * ty[i]
-        p2x = p3x - tension * tx[j]
-        p2y = p3y - tension * ty[j]
+        hi3 = h[i] / 3.0
+        p1x = p0x + m[i][0] * hi3
+        p1y = p0y + m[i][1] * hi3
+        p2x = p3x - m[j][0] * hi3
+        p2y = p3y - m[j][1] * hi3
         partes.append(
-            f"C {p1x:.5f},{p1y:.5f} {p2x:.5f},{p2y:.5f} "
-            f"{p3x:.5f},{p3y:.5f}"
+            f"C {p1x:.9f},{p1y:.9f} {p2x:.9f},{p2y:.9f} "
+            f"{p3x:.9f},{p3y:.9f}"
         )
     if cerrar:
         partes.append("Z")
