@@ -717,6 +717,309 @@ def perfil_superficie_aplanatica(sup, r_max, N=500):
     return r[mask], z[mask]
 
 
+def punto_superficie(sup, rho):
+    """Punto (z, r) de la superficie a distancia ρ del vértice."""
+    if sup.get('esfera'):
+        R = float(sup['R'])
+        # ρ es la cuerda vértice-punto: ρ = 2|R|·sin(θ/2)
+        th = 2.0 * np.arcsin(min(rho / (2.0 * abs(R)), 1.0))
+        return sup['zeta'] + R * (1.0 - np.cos(th)), abs(R) * np.sin(th)
+    tau = float(_tau_de_rho(sup, rho))
+    return sup['zeta'] + tau, np.sqrt(max(rho * rho - tau * tau, 0.0))
+
+
+def normal_superficie(sup, z, r):
+    """Normal unitaria a la superficie cartesiana en el punto (z, r).
+
+    Se apoya en la propiedad geométrica que define V̄C̄ₖ (Ec. 90 de la
+    tesis): la normal en cualquier punto corta el eje en
+    Cₖ = ζₖ + V̄C̄ₖ, de modo que su dirección es (punto − Cₖ).  Escrita
+    con q = 1/V̄C̄ₖ queda
+
+        n̂ ∝ (q·(z − ζ) − 1,  q·r) ,
+
+    forma válida también cuando V̄C̄ₖ → ∞ (superficie plana, q = 0), donde
+    devuelve la dirección axial.
+    """
+    rho = np.hypot(z - sup['zeta'], r)
+    q = float(inversa_vc(sup, rho))
+    nz = q * (z - sup['zeta']) - 1.0
+    nr = q * r
+    norma = np.hypot(nz, nr)
+    if norma < 1e-30:
+        return 1.0, 0.0
+    return nz / norma, nr / norma
+
+
+def rho_de_r(sup, r):
+    """Distancia vértice-punto ρ correspondiente a la altura radial r."""
+    r = abs(float(r))
+    if sup.get('esfera'):
+        R = abs(float(sup['R']))
+        th = np.arcsin(min(r / R, 1.0))
+        return 2.0 * R * np.sin(0.5 * th)
+    rho = r
+    for _ in range(120):
+        tau = float(_tau_de_rho(sup, rho))
+        nuevo = np.hypot(r, tau)
+        if abs(nuevo - rho) < 1e-13 * max(1.0, rho):
+            return nuevo
+        rho = nuevo
+    return rho
+
+
+def _f_superficie(sup, z, r):
+    """Residuo de pertenencia a la superficie: 0 sobre ella.
+
+    Se usa la forma τ(ρ) también para la esfera: la relación
+    ρ² = 2R(z − ζ) vale para todo el círculo, así que la rama correcta
+    (la del casquete que contiene al vértice) se selecciona acotando ρ
+    en ``intersectar``, no aquí.
+    """
+    rho = np.hypot(z - sup['zeta'], r)
+    if sup.get('esfera'):
+        return (z - sup['zeta']) - rho * rho / (2.0 * float(sup['R']))
+    return (z - sup['zeta']) - float(_tau_de_rho(sup, rho))
+
+
+def intersectar(sup, P, d, r_max, t_max=None, n_scan=3000):
+    """Primer corte del rayo P + t·d (t > 0) con el casquete útil.
+
+    Sólo se considera la porción de superficie dentro de la apertura
+    (ρ ≤ ρ(r_max)); sin esa cota el rayo podría cortar la rama lejana
+    del óvalo o el lado opuesto de la esfera, que no son parte del
+    elemento óptico.
+
+    Devuelve (t, z, r) o None si el rayo no la alcanza dentro de r_max.
+    """
+    pz, pr = P
+    dz, dr = d
+    rho_lim = rho_de_r(sup, r_max) * 1.001
+    if t_max is None:
+        # Cota: llegar holgadamente más allá del plano del vértice
+        if abs(dz) > 1e-12:
+            t_v = (sup['zeta'] - pz) / dz
+            t_max = abs(t_v) * 3.0 + 4.0 * r_max
+        else:
+            t_max = 4.0 * r_max
+        if t_max <= 0:
+            return None
+
+    ts = np.linspace(1e-9, t_max, n_scan)
+    prev_t, prev_f = None, None
+    for t in ts:
+        z = pz + t * dz
+        r = pr + t * dr
+        if abs(r) > r_max * 1.001 or np.hypot(z - sup['zeta'], r) > rho_lim:
+            prev_t, prev_f = t, None     # fuera del casquete útil
+            continue
+        f = _f_superficie(sup, z, r)
+        if prev_f is not None and np.sign(f) != np.sign(prev_f):
+            lo, hi = prev_t, t
+            for _ in range(200):
+                mid = 0.5 * (lo + hi)
+                zm = pz + mid * dz
+                rm = pr + mid * dr
+                if np.sign(_f_superficie(sup, zm, rm)) == np.sign(prev_f):
+                    lo = mid
+                else:
+                    hi = mid
+            t_hit = 0.5 * (lo + hi)
+            return t_hit, pz + t_hit * dz, pr + t_hit * dr
+        prev_t, prev_f = t, f
+    return None
+
+
+def refractar(d, n_hat, n_in, n_out):
+    """Ley de Snell-Descartes vectorial en 2D. None en reflexión total."""
+    dz, dr = d
+    nz, nr = n_hat
+    cos_i = -(dz * nz + dr * nr)
+    if cos_i < 0:                      # orientar la normal contra el rayo
+        nz, nr, cos_i = -nz, -nr, -cos_i
+    eta = n_in / n_out
+    k = 1.0 - eta * eta * (1.0 - cos_i * cos_i)
+    if k < 0:
+        return None
+    cos_t = np.sqrt(k)
+    return (eta * dz + (eta * cos_i - cos_t) * nz,
+            eta * dr + (eta * cos_i - cos_t) * nr)
+
+
+def trazar_rayo(superficies, P, d, r_max):
+    """Traza un rayo por una lista de superficies (método del cap. 3).
+
+    Trazado exacto sobre las superficies analíticas — independiente de la
+    aproximación Bézier del SVG, por lo que sirve como referencia.
+
+    Args:
+        superficies: lista de superficies (n_in, n_out, zeta, GOTS/esfera)
+        P, d       : origen (z, r) y dirección unitaria del rayo
+        r_max      : apertura (semidiámetro); un escalar común a todas las
+                     superficies o una secuencia con una por superficie
+
+    Returns:
+        (puntos, direcciones, rhos): vértices de la trayectoria, direcciones
+        de cada tramo (la última es la del rayo emergente) y la distancia
+        vértice-punto ρₖ en cada superficie.  Devuelve (None, None, None)
+        si el rayo se pierde (viñeteo o reflexión total).
+    """
+    if np.isscalar(r_max):
+        aperturas = [float(r_max)] * len(superficies)
+    else:
+        aperturas = [float(v) for v in r_max]
+    norma = np.hypot(*d)
+    d = (d[0] / norma, d[1] / norma)
+    puntos, direcciones, rhos = [P], [], []
+    for sup, r_ap in zip(superficies, aperturas):
+        golpe = intersectar(sup, P, d, r_ap)
+        if golpe is None:
+            return None, None, None
+        _, z, r = golpe
+        n_hat = normal_superficie(sup, z, r)
+        d_new = refractar(d, n_hat, sup['n_in'], sup['n_out'])
+        if d_new is None:
+            return None, None, None
+        norma = np.hypot(*d_new)
+        d = (d_new[0] / norma, d_new[1] / norma)
+        P = (z, r)
+        puntos.append(P)
+        direcciones.append(d)
+        rhos.append(float(np.hypot(z - sup['zeta'], r)))
+    return puntos, direcciones, rhos
+
+
+def foco_meridional(origenes, direcciones):
+    """Punto de mejor cruce (mínimos cuadrados) de un haz de rectas.
+
+    Es el foco meridional real del abanico: para un punto fuera de eje NO
+    coincide con el punto imagen paraxial, sino que se sitúa sobre la
+    superficie imagen curva.
+
+    Returns:
+        (foco, radio_spot): punto (z, r) y máxima distancia de las rectas
+        a ese punto (tamaño del spot meridional).
+    """
+    A = np.zeros((2, 2))
+    b = np.zeros(2)
+    for o, d in zip(origenes, direcciones):
+        v = np.asarray(d, dtype=float)
+        v = v / np.hypot(*v)
+        Pm = np.eye(2) - np.outer(v, v)
+        A += Pm
+        b += Pm @ np.asarray(o, dtype=float)
+    foco = np.linalg.solve(A, b)
+    radio = max(
+        float(np.linalg.norm(
+            (np.eye(2) - np.outer(np.asarray(d) / np.hypot(*d),
+                                  np.asarray(d) / np.hypot(*d)))
+            @ (foco - np.asarray(o))))
+        for o, d in zip(origenes, direcciones))
+    return foco, radio
+
+
+def seno_abbe(superficies, d_obj, r_max, semiangulo_deg=6.0, n_rayos=11):
+    """Comprueba la condición seno de Abbe en el punto objeto axial.
+
+    Para el par conjugado axial la Ec. 69/87 exige que
+
+        sin u₀ / sin u_N  =  (n_N / n₀) · M
+
+    sea la MISMA constante para todos los rayos, sea cual sea su
+    inclinación.  Ésa es la definición operativa del aplanatismo: sólo
+    tiene sentido sobre el eje, ya que fuera de eje los ángulos deben
+    medirse respecto al rayo principal.
+
+    Returns:
+        dict con 'razones' (una por rayo), 'media', 'desviacion_rel'
+        (dispersión relativa; ~0 ⇒ aplanático) y 'n_rayos'.
+    """
+    razones = []
+    for th in np.linspace(-np.radians(semiangulo_deg),
+                          np.radians(semiangulo_deg), n_rayos):
+        if abs(th) < 1e-9:
+            continue                      # el rayo axial no define ángulo
+        d0 = (np.cos(th), np.sin(th))
+        _, dirs, _ = trazar_rayo(superficies, (d_obj, 0.0), d0, r_max)
+        if dirs is None:
+            continue
+        s0, sN = d0[1], dirs[-1][1]
+        if abs(sN) > 1e-15:
+            razones.append(s0 / sN)
+    razones = np.asarray(razones, dtype=float)
+    if razones.size == 0:
+        return {'razones': razones, 'media': float('nan'),
+                'desviacion_rel': float('nan'), 'n_rayos': 0}
+    media = float(np.mean(razones))
+    return {
+        'razones': razones,
+        'media': media,
+        'desviacion_rel': float(np.std(razones) / abs(media)) if media else
+                          float('nan'),
+        'n_rayos': int(razones.size),
+    }
+
+
+def direcciones_pupila(d_obj, h, z_pupila, r_pupila, n_rayos):
+    """Direcciones desde (d_obj, h) que llenan uniformemente la pupila.
+
+    Limitar el haz con una pupila física —y no con un semiángulo fijo—
+    es lo que hace comparables los abanicos de distintos puntos objeto:
+    todos atraviesan la misma abertura, como en los ejemplos de la tesis.
+    """
+    for y in np.linspace(-r_pupila, r_pupila, n_rayos):
+        dz, dr = z_pupila - d_obj, y - h
+        norma = np.hypot(dz, dr)
+        yield (dz / norma, dr / norma)
+
+
+def superficie_imagen(superficies, d_obj, alturas, r_max,
+                      semiangulo_deg=4.0, n_rayos=9,
+                      z_pupila=None, r_pupila=None):
+    """Superficie imagen meridional: dónde enfoca REALMENTE cada punto.
+
+    Para cada altura de objeto traza un abanico y localiza su foco
+    meridional.  La curva que une esos focos es la superficie imagen
+    curva sobre la que un sistema aplanático forma la imagen nítida: NO
+    es el plano imagen paraxial (la tesis la dibuja punteada en la
+    Fig. 17 y la comenta en la p. 101).
+
+    El aplanatismo se manifiesta en que el *spot* en cada uno de esos
+    focos es diminuto (ausencia de coma), no en que los focos caigan
+    sobre un plano.
+
+    Returns:
+        lista de dicts con claves: h (altura objeto), foco (z, r),
+        spot (radio meridional del haz en ese foco), n_rayos.
+    """
+    resultados = []
+    for h in alturas:
+        origen = (d_obj, float(h))
+        if z_pupila is not None and r_pupila is not None:
+            direcciones = list(direcciones_pupila(d_obj, h, z_pupila,
+                                                  r_pupila, n_rayos))
+        else:
+            # sin pupila: abanico de semiángulo fijo apuntado al vértice
+            theta_c = np.arctan2(-h, superficies[0]['zeta'] - d_obj)
+            direcciones = [
+                (np.cos(theta_c + th), np.sin(theta_c + th))
+                for th in np.linspace(-np.radians(semiangulo_deg),
+                                      np.radians(semiangulo_deg), n_rayos)]
+        orig_sal, dir_sal = [], []
+        for d0 in direcciones:
+            pts, dirs, _ = trazar_rayo(superficies, origen, d0, r_max)
+            if pts is None:
+                continue
+            orig_sal.append(pts[-1])
+            dir_sal.append(dirs[-1])
+        if len(orig_sal) < 3:
+            continue
+        foco, spot = foco_meridional(orig_sal, dir_sal)
+        resultados.append({'h': float(h), 'foco': foco, 'spot': spot,
+                           'n_rayos': len(orig_sal)})
+    return resultados
+
+
 def alturas_estigmaticas(diseno, rho_0):
     """ρ₁ del rayo que incide en la superficie 0 con parámetro ρ₀.
 

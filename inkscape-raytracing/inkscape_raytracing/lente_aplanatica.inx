@@ -6,40 +6,44 @@
     <param name="tab" type="notebook">
 
         <!-- ══ Tab 1: Diseño ════════════════════════════════════════════ -->
-        <page name="diseno" gui-text="Diseño aplanático">
+        <page name="diseno" gui-text="Diseño">
 
-            <label appearance="header">Tipo de sistema rigurosamente aplanático</label>
-            <param name="tipo" type="enum" gui-text="Tipo (Silva-Lora §4.4):">
+            <param name="modo" type="enum" gui-text="Modo:">
+                <item value="tipo">Tipo rigurosamente aplanático (§4.4)</item>
+                <item value="libre">Superficies libres (estigmático, a verificar)</item>
+            </param>
+
+            <separator/>
+            <label appearance="header">Tipo aplanático (modo «Tipo»)</label>
+            <param name="tipo" type="enum" gui-text="Tipo:">
                 <item value="1">Tipo-1 — cónicas, interior colimado</item>
                 <item value="0">Tipo-0 — esferas en puntos de Young (anastigmática)</item>
                 <item value="2">Tipo-2 — vértices planos (O = 0), imagen virtual</item>
                 <item value="3">Tipo-3 — G = 0, menisco, imagen virtual</item>
             </param>
-            <param name="rama" type="enum"
-                   gui-text="Rama (sólo tipo-1):">
+            <param name="rama" type="enum" gui-text="Rama (sólo tipo-1):">
                 <item value="real">biconvexa — imagen real (M = −1)</item>
                 <item value="virtual">menisco — imagen virtual (M = +1)</item>
             </param>
-            <label>Todos los tipos son libres de aberración esférica y coma de
-manera exacta. La posición de la imagen d₂ queda determinada por el diseño
-y se marca con el círculo verde (hueco si la imagen es virtual).</label>
+            <label>En este modo la posición de la imagen d₂ NO se introduce: queda
+determinada por el diseño y se marca en el dibujo. Los tipos 1-3 exigen n₂ = n₀.</label>
 
             <separator/>
             <label appearance="header">Índices de refracción</label>
             <param name="n0" type="float" min="1.0" max="5.0" precision="4"
-                   gui-text="n₀  (espacio objeto, generalmente aire = 1):">1.0</param>
+                   gui-text="n₀  (espacio objeto, normalmente aire = 1):">1.0</param>
             <param name="n1" type="float" min="1.0" max="5.0" precision="4"
                    gui-text="n₁  (vidrio de la lente):">1.8</param>
             <param name="n2" type="float" min="1.0" max="5.0" precision="4"
-                   gui-text="n₂  (espacio imagen; los tipos 1-3 fuerzan n₂ = n₀):">1.0</param>
+                   gui-text="n₂  (espacio imagen):">1.0</param>
 
             <separator/>
             <label appearance="header">Posiciones axiales</label>
-            <param name="zeta_0" type="float" min="-10000" max="10000" precision="3"
+            <param name="zeta_0" type="float" min="-100000" max="100000" precision="3"
                    gui-text="ζ₀  (vértice superficie frontal):">60.0</param>
-            <param name="zeta_1" type="float" min="-10000" max="10000" precision="3"
+            <param name="zeta_1" type="float" min="-100000" max="100000" precision="3"
                    gui-text="ζ₁  (vértice superficie trasera, &gt; ζ₀):">70.0</param>
-            <param name="d_objeto" type="float" min="-10000" max="10000" precision="3"
+            <param name="d_objeto" type="float" min="-100000" max="100000" precision="3"
                    gui-text="d₀  (punto objeto, debe ser &lt; ζ₀):">0.0</param>
 
             <separator/>
@@ -52,35 +56,92 @@ y se marca con el círculo verde (hueco si la imagen es virtual).</label>
 
         </page>
 
-        <!-- ══ Tab 2: Apertura, haz y pupila ════════════════════════════ -->
-        <page name="haz" gui-text="Apertura, Haz y Pupila">
+        <!-- ══ Tab 2: Superficies libres ════════════════════════════════ -->
+        <page name="libre" gui-text="Superficies libres (GOTS)">
+
+            <label appearance="header">Conjugados de cada superficie</label>
+            <label>Con el modo «Superficies libres» se introducen los tres puntos
+conjugados y la extensión deriva los parámetros de forma GOTS (G, O, T, S)
+de ambas superficies mediante las Ecs. 10-13 de la tesis.
+
+El singlete resultante es rigurosamente estigmático para el par axial
+(d₀ → d₂), pero en general NO aplanático. La pestaña «Análisis» mide
+cuánto se aparta: (M − 1)_RMS de la Ec. 94 y la condición seno de Abbe.
+
+Es el modo para explorar diseños propios y reproducir barridos como el
+de la Fig. 16 de la tesis (búsqueda del factor de forma óptimo).</label>
+
+            <separator/>
+            <param name="d_inter" type="float" min="-1000000" max="1000000" precision="6"
+                   gui-text="d₁  (imagen intermedia, entre las dos superficies):">599.172082</param>
+            <param name="d_imagen" type="float" min="-1000000" max="1000000" precision="6"
+                   gui-text="d₂  (imagen final):">200.0</param>
+            <label>Los índices, los vértices ζ₀, ζ₁ y el objeto d₀ se toman de la
+pestaña «Diseño».  Valores por defecto: la LSOE aplanática de la Tabla 5
+(σ = 0.093069, mínimo de (M − 1)_RMS).</label>
+
+        </page>
+
+        <!-- ══ Tab 3: Apertura, haz y pupila ════════════════════════════ -->
+        <page name="haz" gui-text="Apertura y Haz">
 
             <label appearance="header">Apertura de la lente</label>
-            <param name="r_apertura" type="float" min="0" max="10000" precision="3"
-                   gui-text="Radio de apertura r_max (0 = calcular automático):">0.0</param>
+            <param name="r_apertura" type="float" min="0" max="100000" precision="3"
+                   gui-text="Radio de apertura r_max (0 = automático):">0.0</param>
 
             <separator/>
-            <label appearance="header">Haz de rayos desde el punto objeto</label>
-            <param name="n_rayos" type="int" min="1" max="51"
-                   gui-text="Número de rayos:">9</param>
-            <param name="angulo_max_deg" type="float" min="0.1" max="45" precision="2"
-                   gui-text="Ángulo máximo del haz (°):">8.0</param>
-
-            <separator/>
-            <label appearance="header">Pupila física (como en la tesis)</label>
+            <label appearance="header">Pupila física</label>
+            <label>La pupila limita el haz igual que en los ejemplos de la tesis y
+hace que todos los puntos de campo atraviesen la misma abertura, que es
+lo que permite comparar sus imágenes.</label>
             <param name="mostrar_pupila" type="boolean"
-                   gui-text="Dibujar pupila (dos segmentos beam-dump)">false</param>
-            <param name="z_pupila" type="float" min="-10000" max="10000" precision="3"
+                   gui-text="Dibujar pupila (dos topes absorbentes)">true</param>
+            <param name="z_pupila" type="float" min="-100000" max="100000" precision="3"
                    gui-text="Posición axial de la pupila:">55.0</param>
-            <param name="r_pupila" type="float" min="0.1" max="10000" precision="3"
-                   gui-text="Radio de la abertura:">10.0</param>
+            <param name="r_pupila" type="float" min="0.1" max="100000" precision="3"
+                   gui-text="Radio de la abertura:">8.0</param>
 
             <separator/>
-            <label appearance="header">Elementos de visualización</label>
+            <label appearance="header">Rayos</label>
+            <param name="n_rayos" type="int" min="3" max="51"
+                   gui-text="Rayos por punto de campo:">9</param>
+
+            <separator/>
             <param name="mostrar_eje" type="boolean"
                    gui-text="Dibujar eje óptico">true</param>
             <param name="mostrar_puntos" type="boolean"
-                   gui-text="Marcar puntos objeto e imagen">true</param>
+                   gui-text="Marcar los puntos objeto">true</param>
+
+        </page>
+
+        <!-- ══ Tab 4: Análisis ══════════════════════════════════════════ -->
+        <page name="analisis" gui-text="Análisis del aplanatismo">
+
+            <label appearance="header">Puntos de campo</label>
+            <param name="n_campo" type="int" min="1" max="8"
+                   gui-text="Número de fuentes puntuales:">4</param>
+            <param name="h_campo" type="float" min="0" max="100000" precision="3"
+                   gui-text="Altura máxima del campo:">9.0</param>
+            <param name="trazar_campo" type="boolean"
+                   gui-text="Emitir los haces de todos los puntos de campo">true</param>
+
+            <separator/>
+            <label appearance="header">Dónde se forma realmente la imagen</label>
+            <label>En un sistema aplanático los puntos fuera de eje enfocan de forma
+nítida (sin coma), pero NO sobre el plano imagen paraxial: sus focos se
+sitúan sobre una superficie curva (curvatura de campo, Fig. 17 de la
+tesis).  Esta opción traza los abanicos, marca los focos meridionales
+reales con círculos huecos y los une con una curva morada; el plano
+paraxial se dibuja como línea gris de referencia.</label>
+            <param name="dibujar_imagen" type="boolean"
+                   gui-text="Dibujar superficie imagen y focos reales">true</param>
+
+            <separator/>
+            <label appearance="header">Verificación numérica</label>
+            <label>Anota en el dibujo la condición seno de Abbe, la métrica
+(M − 1)_RMS de la Ec. 94 y el tamaño del spot meridional.</label>
+            <param name="anotar" type="boolean"
+                   gui-text="Anotar la verificación en el dibujo">true</param>
 
         </page>
 

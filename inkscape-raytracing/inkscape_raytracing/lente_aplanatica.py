@@ -1,32 +1,51 @@
-"""Extensión para generar lentes singlete rigurosamente aplanáticas.
+"""Extensión para generar y analizar lentes singlete aplanáticas.
 
-Implementa los cuatro tipos de sistemas aplanáticos en todo rigor del
-capítulo 4 de la tesis de Silva-Lora (2024): lentes libres de aberración
-esférica Y de coma de manera exacta (no aproximada), obtenidas como
-soluciones cerradas de la condición de aplanatismo generalizada
-M(ρₖ) = 1 (Ecs. 78/93):
+Dos modos de trabajo:
 
-  tipo 0 — esferas en los puntos de Young (2Sₖ = GₖOₖ²). Además libre
-           de astigmatismo (anastigmática). Menisco, imagen virtual.
-  tipo 1 — interior colimado (d₁ → ∞): superficies cónicas idénticas.
-           Rama 'real' → biconvexa (imagen real, M = −1);
-           rama 'virtual' → menisco (imagen virtual, M = +1).
-  tipo 2 — Oₖ = 0: ovoides de vértice plano (generaliza la lámina
-           plano-paralela). Imagen virtual, tipo lente oftálmica.
-  tipo 3 — Gₖ = 0. Menisco, imagen virtual.
+1. **Tipos rigurosamente aplanáticos** (§4.4 de la tesis de Silva-Lora,
+   2024): los cuatro casos cerrados en los que la condición de
+   aplanatismo generalizada M(ρₖ) = 1 (Ecs. 78/93) se cumple en todo
+   rigor, de modo que la lente carece de aberración esférica Y de coma
+   de manera exacta, no aproximada:
 
-La lente se marca como optics:glass para la extensión de ray tracing, y
-se emite un haz de prueba desde el punto objeto más, opcionalmente, una
-pupila física (dos segmentos beam-dump) como en la tesis.
+     tipo 0 — esferas en los puntos de Young (2Sₖ = GₖOₖ²); además libre
+              de astigmatismo (anastigmática).
+     tipo 1 — interior colimado (d₁ → ∞): superficies cónicas idénticas.
+              Rama 'real' → biconvexa (M = −1); 'virtual' → menisco.
+     tipo 2 — Oₖ = 0: ovoides de vértice plano; imagen virtual.
+     tipo 3 — Gₖ = 0; menisco, imagen virtual.
+
+2. **Superficies libres**: se introducen directamente los conjugados de
+   cada superficie (ζₖ, dₖ, d_{k+1}) y la extensión deriva sus
+   parámetros GOTS con ``calcular_gots``.  El singlete resultante es
+   rigurosamente estigmático para el par axial, pero en general NO
+   aplanático: la pestaña de análisis mide cuánto se aparta, con la
+   métrica (M − 1)_RMS de la Ec. 94 y la condición seno de Abbe.  Es el
+   modo para explorar diseños propios y reproducir barridos como el de
+   la Fig. 16 de la tesis.
+
+La pestaña **Análisis** puede además dibujar dónde se forma realmente la
+imagen: en un sistema aplanático los puntos objeto fuera de eje enfocan
+nítidamente, pero sobre una SUPERFICIE CURVA, no sobre el plano imagen
+paraxial (Fig. 17 de la tesis).  La extensión traza los abanicos de
+varios puntos de campo, marca sus focos meridionales reales y une esos
+focos con una curva.
 """
 
 import numpy as np
 import inkex
 
 from gots_util import (
+    calcular_gots,
     disenar_aplanatica,
     perfil_superficie_aplanatica,
     puntos_a_bezier_path_str,
+    superficie_imagen,
+    seno_abbe,
+    condicion_aplanatismo,
+    rms_aplanatismo,
+    trazar_rayo,
+    alturas_estigmaticas,
 )
 
 # inkex serializa los números de un path con {:.6g}: para coordenadas de
@@ -41,12 +60,12 @@ except ImportError:  # versiones antiguas de inkex
 
 
 class LenteAplanatica(inkex.GenerateExtension):
-    """Genera una lente rigurosamente aplanática con haz de prueba."""
+    """Genera una lente aplanática con haz de prueba y análisis."""
 
     @property
     def style_lente(self):
         return {
-            "stroke": "#000000",
+            "stroke": "#33691e",
             "fill": "#c2ddb7",
             "fill-opacity": "0.75",
             "stroke-linejoin": "round",
@@ -57,7 +76,8 @@ class LenteAplanatica(inkex.GenerateExtension):
     def add_arguments(pars):
         pars.add_argument("--tab", type=str, default="diseno")
 
-        # ── Diseño ──────────────────────────────────────────────────────
+        # ── Modo y diseño por tipo ──────────────────────────────────────
+        pars.add_argument("--modo",     type=str,   default="tipo")
         pars.add_argument("--tipo",     type=str,   default="1")
         pars.add_argument("--rama",     type=str,   default="real")
         pars.add_argument("--n0",       type=float, default=1.0)
@@ -68,90 +88,127 @@ class LenteAplanatica(inkex.GenerateExtension):
         pars.add_argument("--d_objeto", type=float, default=0.0)
         pars.add_argument("--unidad",   type=str,   default="mm")
 
+        # ── Superficies libres ──────────────────────────────────────────
+        pars.add_argument("--d_inter",  type=float, default=599.172082)
+        pars.add_argument("--d_imagen", type=float, default=200.0)
+
         # ── Apertura y haz ──────────────────────────────────────────────
         pars.add_argument("--r_apertura",     type=float, default=0.0)
         pars.add_argument("--n_rayos",        type=int,   default=9)
-        pars.add_argument("--angulo_max_deg", type=float, default=8.0)
         pars.add_argument("--mostrar_eje",    type=inkex.Boolean, default=True)
         pars.add_argument("--mostrar_puntos", type=inkex.Boolean, default=True)
 
         # ── Pupila física ───────────────────────────────────────────────
-        pars.add_argument("--mostrar_pupila", type=inkex.Boolean, default=False)
+        pars.add_argument("--mostrar_pupila", type=inkex.Boolean, default=True)
         pars.add_argument("--z_pupila",       type=float, default=55.0)
-        pars.add_argument("--r_pupila",       type=float, default=10.0)
+        pars.add_argument("--r_pupila",       type=float, default=8.0)
+
+        # ── Análisis ────────────────────────────────────────────────────
+        pars.add_argument("--n_campo",        type=int,   default=4)
+        pars.add_argument("--h_campo",        type=float, default=9.0)
+        pars.add_argument("--trazar_campo",   type=inkex.Boolean, default=True)
+        pars.add_argument("--dibujar_imagen", type=inkex.Boolean, default=True)
+        pars.add_argument("--anotar",         type=inkex.Boolean, default=True)
 
     # ── Helpers ─────────────────────────────────────────────────────────
 
     def _sv(self, val):
         return self.svg.viewport_to_unit(f"{val}{self.options.unidad}")
 
+    def _X(self, z):
+        """Coordenada SVG horizontal (vértice frontal en el origen)."""
+        return self._sv(z - self.options.zeta_0)
+
+    def _Y(self, r):
+        """Coordenada SVG vertical (r hacia arriba ⇒ y hacia abajo)."""
+        return self._sv(r)
+
     def _apertura_defecto(self, diseno):
-        """Apertura automática: donde ambos perfiles siguen siendo
-        univaluados y la lente conserva un espesor de borde razonable."""
+        """Apertura automática: dominio de cada superficie, escala física
+        del sistema y punto donde ambos perfiles se cruzarían."""
         sup0, sup1 = diseno['superficies']
-        candidatos = []
+        topes = []
         for sup in (sup0, sup1):
             if sup.get('esfera'):
-                candidatos.append(0.75 * abs(sup['R']))
+                topes.append(0.75 * abs(sup['R']))
             else:
                 coef_rad = 2.0 * sup['S'] - sup['O'] * sup['OG']
                 if coef_rad < -1e-15:
-                    # dominio limitado del radical → borde del óvalo
-                    candidatos.append(0.85 * float(np.sqrt(-1.0 / coef_rad)))
-        # Escala física del sistema como tope general
-        d_0 = diseno['d'][0]
-        z_0 = diseno['zetas'][0]
-        candidatos.append(abs(d_0 - z_0) / 6.0)
+                    topes.append(0.85 * float(np.sqrt(-1.0 / coef_rad)))
+        topes.append(abs(diseno['d'][0] - diseno['zetas'][0]) / 6.0)
+        r_ap = min(topes)
 
-        r_ap = min(candidatos)
-
-        # Si las superficies se cruzan antes (lente biconvexa), recortar
-        r_probe = np.linspace(r_ap * 1e-3, r_ap, 400)
         try:
             r0, z0 = perfil_superficie_aplanatica(sup0, r_ap, N=400)
             r1, z1 = perfil_superficie_aplanatica(sup1, r_ap, N=400)
-            z0i = np.interp(r_probe, r0, z0)
-            z1i = np.interp(r_probe, r1, z1)
-            cruces = np.where(np.diff(np.sign(z1i - z0i)) != 0)[0]
+            rp = np.linspace(r_ap * 1e-3, min(r0[-1], r1[-1]), 400)
+            dz = np.interp(rp, r1, z1) - np.interp(rp, r0, z0)
+            cruces = np.where(np.diff(np.sign(dz)) != 0)[0]
             if len(cruces) > 0:
-                r_ap = min(r_ap, 0.92 * float(r_probe[cruces[0]]))
+                r_ap = min(r_ap, 0.92 * float(rp[cruces[0]]))
         except Exception:
             pass
         return r_ap
+
+    def _diseno_libre(self):
+        """Singlete estigmático a partir de los conjugados introducidos."""
+        o = self.options
+        p0 = calcular_gots(o.n0, o.n1, o.zeta_0, o.d_objeto, o.d_inter)
+        p1 = calcular_gots(o.n1, o.n2, o.zeta_1, o.d_inter, o.d_imagen)
+        sup0 = dict(p0, n_in=o.n0, n_out=o.n1,
+                    d_in=o.d_objeto, d_out=o.d_inter)
+        sup1 = dict(p1, n_in=o.n1, n_out=o.n2,
+                    d_in=o.d_inter, d_out=o.d_imagen)
+        M_lat = ((o.n0 / o.n2) * (o.d_inter - o.zeta_0)
+                 * (o.d_imagen - o.zeta_1)
+                 / ((o.d_objeto - o.zeta_0) * (o.d_inter - o.zeta_1)))
+        return {
+            'tipo': 'libre',
+            'n': (o.n0, o.n1, o.n2),
+            'zetas': (o.zeta_0, o.zeta_1),
+            'd': (o.d_objeto, o.d_inter, o.d_imagen),
+            'magnificacion': M_lat,
+            'superficies': [sup0, sup1],
+        }
 
     # ── Generación ──────────────────────────────────────────────────────
 
     def generate(self):
         opts = self.options
+        modo_libre = (opts.modo == "libre")
         tipo = int(opts.tipo)
 
         if abs(opts.n0 - 1.0) > 1e-9:
             inkex.utils.errormsg(
                 "Aviso: el trazador de inkscape-raytracing supone que el\n"
                 "medio exterior es aire (n = 1). Con n₀ ≠ 1 el trazado no\n"
-                "coincidirá con el diseño aplanático."
+                "coincidirá con el diseño."
             )
-        if tipo != 0 and abs(opts.n2 - opts.n0) > 1e-9:
+        if (not modo_libre) and tipo != 0 and abs(opts.n2 - opts.n0) > 1e-9:
             inkex.utils.errormsg(
                 f"Aviso: el tipo {tipo} exige n₂ = n₀ para que M = 1\n"
                 "(Ec. 112 de la tesis); se usará n₂ = n₀ y se ignorará el\n"
                 "valor introducido."
             )
 
-        # ── 1. Diseño aplanático ─────────────────────────────────────────
+        # ── 1. Diseño ────────────────────────────────────────────────────
         try:
-            diseno = disenar_aplanatica(
-                tipo, opts.n0, opts.n1,
-                opts.zeta_0, opts.zeta_1, opts.d_objeto,
-                n2=(opts.n2 if tipo == 0 else None),
-                rama=opts.rama,
-            )
+            if modo_libre:
+                diseno = self._diseno_libre()
+            else:
+                diseno = disenar_aplanatica(
+                    tipo, opts.n0, opts.n1,
+                    opts.zeta_0, opts.zeta_1, opts.d_objeto,
+                    n2=(opts.n2 if tipo == 0 else None),
+                    rama=opts.rama,
+                )
         except Exception as exc:
-            inkex.utils.errormsg(f"Error en el diseño aplanático: {exc}")
+            inkex.utils.errormsg(f"Error en el diseño: {exc}")
             return
 
-        sup0, sup1 = diseno['superficies']
+        sups = diseno['superficies']
         d_0, d_1, d_2 = diseno['d']
+        M_lat = diseno['magnificacion']
 
         # ── 2. Apertura ──────────────────────────────────────────────────
         if opts.r_apertura > 1e-6:
@@ -165,110 +222,195 @@ class LenteAplanatica(inkex.GenerateExtension):
             )
             return
 
-        # ── 3. Perfiles ──────────────────────────────────────────────────
-        r0_arr, z0_arr = perfil_superficie_aplanatica(sup0, r_ap, N=800)
-        r1_arr, z1_arr = perfil_superficie_aplanatica(sup1, r_ap, N=800)
+        # ── 3. Perfiles y contorno ───────────────────────────────────────
+        r0_arr, z0_arr = perfil_superficie_aplanatica(sups[0], r_ap, N=800)
+        r1_arr, z1_arr = perfil_superficie_aplanatica(sups[1], r_ap, N=800)
         if len(r0_arr) < 2 or len(r1_arr) < 2:
             inkex.utils.errormsg(
                 "No se pudieron calcular los perfiles de las superficies."
             )
             return
 
-        # ── 4. Unidades SVG (vértice frontal en el origen) ──────────────
-        zeta_ref = opts.zeta_0
-        z0_svg = np.array([self._sv(z - zeta_ref) for z in z0_arr])
-        z1_svg = np.array([self._sv(z - zeta_ref) for z in z1_arr])
-        r0_svg = np.array([self._sv(r)             for r in r0_arr])
-        r1_svg = np.array([self._sv(r)             for r in r1_arr])
+        z0s = np.array([self._X(z) for z in z0_arr])
+        z1s = np.array([self._X(z) for z in z1_arr])
+        r0s = np.array([self._Y(r) for r in r0_arr])
+        r1s = np.array([self._Y(r) for r in r1_arr])
 
-        # ── 5. Contorno cerrado (mismo recorrido que lente_ovoide) ──────
-        puntos = [(float(z0_svg[0]), 0.0)]
-        for z, r in zip(z0_svg[1:], r0_svg[1:]):
+        puntos = [(float(z0s[0]), 0.0)]
+        for z, r in zip(z0s[1:], r0s[1:]):
             puntos.append((float(z), -float(r)))
-        puntos.append((float(z1_svg[-1]), -float(r1_svg[-1])))
-        for z, r in zip(reversed(list(z1_svg[:-1])), reversed(list(r1_svg[:-1]))):
+        puntos.append((float(z1s[-1]), -float(r1s[-1])))
+        for z, r in zip(reversed(list(z1s[:-1])), reversed(list(r1s[:-1]))):
             puntos.append((float(z), -float(r)))
-        for z, r in zip(z1_svg[1:], r1_svg[1:]):
+        for z, r in zip(z1s[1:], r1s[1:]):
             puntos.append((float(z), float(r)))
-        puntos.append((float(z0_svg[-1]), float(r0_svg[-1])))
-        for z, r in zip(reversed(list(z0_svg[:-1])), reversed(list(r0_svg[:-1]))):
+        puntos.append((float(z0s[-1]), float(r0s[-1])))
+        for z, r in zip(reversed(list(z0s[:-1])), reversed(list(r0s[:-1]))):
             puntos.append((float(z), float(r)))
 
         lente = inkex.PathElement()
         lente.style = self.style_lente
-        lente.path  = inkex.Path(puntos_a_bezier_path_str(puntos, cerrar=True))
-        lente.desc  = f"optics:glass:{opts.n1:.4f}"
+        lente.path = inkex.Path(puntos_a_bezier_path_str(puntos, cerrar=True))
+        lente.desc = f"optics:glass:{opts.n1:.4f}"
         yield lente
 
-        # ── 6. Eje óptico ────────────────────────────────────────────────
-        x_obj = self._sv(d_0 - zeta_ref)
-        x_img = self._sv(d_2 - zeta_ref)
+        # ── 4. Eje óptico ────────────────────────────────────────────────
+        x_obj = self._X(d_0)
+        x_img = self._X(d_2)
         if opts.mostrar_eje:
             margen = self._sv(15.0)
-            x_lo = min(x_obj, x_img, float(z0_svg[0])) - margen
-            x_hi = max(x_obj, x_img, float(z1_svg[0])) + margen
+            x_lo = min(x_obj, x_img, float(z0s[0])) - margen
+            x_hi = max(x_obj, x_img, float(z1s[0])) + margen
             eje = inkex.PathElement()
             eje.style = {
-                "stroke": "#888888",
-                "stroke-width": "0.3pt",
+                "stroke": "#aaaaaa", "stroke-width": "0.3pt", "fill": "none",
                 "stroke-dasharray": f"{self._sv(3)},{self._sv(1.5)}",
-                "fill": "none",
             }
             eje.path = inkex.Path(f"M {x_lo:.4f},0 L {x_hi:.4f},0")
             yield eje
 
-        # ── 7. Marcadores objeto / imagen ────────────────────────────────
-        if opts.mostrar_puntos:
-            radio_m = self._sv(1.2)
-            # imagen: relleno si es real (d₂ > ζ₁), hueco si es virtual
-            img_real = d_2 > opts.zeta_1
-            marcas = [(x_obj, "#dd2200", True), (x_img, "#00aa33", img_real)]
-            for x, color, relleno in marcas:
-                circ = inkex.Circle()
-                circ.set('cx', f"{x:.4f}")
-                circ.set('cy', "0")
-                circ.set('r',  f"{radio_m:.4f}")
-                if relleno:
-                    circ.style = {"fill": color, "stroke": "none"}
-                else:
-                    circ.style = {"fill": "none", "stroke": color,
-                                  "stroke-width": "0.6pt",
-                                  "stroke-dasharray": f"{self._sv(1.2)},{self._sv(0.8)}"}
-                yield circ
-
-        # ── 8. Pupila física (dos segmentos beam-dump) ──────────────────
+        # ── 5. Pupila física ─────────────────────────────────────────────
         if opts.mostrar_pupila:
-            x_pup  = self._sv(opts.z_pupila - zeta_ref)
-            r_pup  = self._sv(opts.r_pupila)
-            altura = self._sv(opts.r_pupila * 0.8)
+            x_pup = self._X(opts.z_pupila)
+            r_pup = self._Y(opts.r_pupila * 1.02)   # holgura: si el borde
+            # coincide con el rayo marginal, el trazador lo absorbe
+            largo = self._Y(opts.r_pupila * 0.8)
             for lado in (-1.0, +1.0):
                 seg = inkex.PathElement()
                 seg.style = {"stroke": "#222222", "stroke-width": "1.2pt",
                              "fill": "none"}
                 seg.path = inkex.Path(
                     f"M {x_pup:.4f},{lado * r_pup:.4f} "
-                    f"L {x_pup:.4f},{lado * (r_pup + altura):.4f}"
-                )
+                    f"L {x_pup:.4f},{lado * (r_pup + largo):.4f}")
                 seg.desc = "optics:beam_dump"
                 yield seg
 
-        # ── 9. Haz de rayos desde el punto objeto ────────────────────────
-        angulo_max = opts.angulo_max_deg * np.pi / 180.0
-        L_haz      = self._sv(12.0)
-        for theta in np.linspace(-angulo_max, angulo_max, opts.n_rayos):
-            # El trazador toma el endpoint del path como origen del rayo y
-            # −tangente final como dirección → rayo equivalente a uno
-            # nacido en el punto objeto.
-            x_end = float(x_obj + L_haz * np.cos(theta))
-            y_end = float(L_haz * np.sin(theta))
-            haz   = inkex.PathElement()
-            haz.style = {"stroke": "#ff6600", "stroke-width": "0.5pt",
-                         "fill": "none"}
-            haz.path = inkex.Path(
-                f"M {x_obj:.4f},0 L {x_end:.4f},{y_end:.4f}"
-            )
-            haz.desc = "optics:beam"
-            yield haz
+        # ── 6. Abanicos de los puntos de campo ───────────────────────────
+        alturas = ([0.0] if opts.n_campo <= 1
+                   else list(np.linspace(0.0, opts.h_campo, opts.n_campo)))
+        paleta = ["#1144cc", "#00913f", "#dd8800", "#cc2222",
+                  "#7b1fa2", "#00838f"]
+
+        if opts.trazar_campo:
+            for idx, h in enumerate(alturas):
+                color = paleta[idx % len(paleta)]
+                for y in np.linspace(-opts.r_pupila, opts.r_pupila,
+                                     opts.n_rayos):
+                    dz = opts.z_pupila - d_0
+                    dr = y - h
+                    norma = np.hypot(dz, dr)
+                    # El trazador toma el endpoint del path como origen del
+                    # rayo y −tangente final como dirección, así que basta
+                    # dibujar el segmento fuente → pupila.
+                    L = self._sv(min(abs(dz) * 0.9, 25.0))
+                    haz = inkex.PathElement()
+                    haz.style = {"stroke": color, "stroke-width": "0.4pt",
+                                 "fill": "none"}
+                    haz.path = inkex.Path(
+                        f"M {x_obj:.4f},{self._Y(h):.4f} "
+                        f"L {x_obj + L * dz / norma:.4f},"
+                        f"{self._Y(h) + L * dr / norma:.4f}")
+                    haz.desc = "optics:beam"
+                    yield haz
+
+        # ── 7. Marcadores objeto ─────────────────────────────────────────
+        if opts.mostrar_puntos:
+            for idx, h in enumerate(alturas):
+                circ = inkex.Circle()
+                circ.set('cx', f"{x_obj:.4f}")
+                circ.set('cy', f"{self._Y(h):.4f}")
+                circ.set('r', f"{self._sv(1.2):.4f}")
+                circ.style = {"fill": paleta[idx % len(paleta)],
+                              "stroke": "none"}
+                yield circ
+
+        # ── 8. Análisis: dónde se forma realmente la imagen ──────────────
+        resultados = None
+        if opts.dibujar_imagen or opts.anotar:
+            try:
+                resultados = superficie_imagen(
+                    sups, d_0, np.linspace(0.0, opts.h_campo, 13), r_ap,
+                    n_rayos=max(opts.n_rayos, 7),
+                    z_pupila=opts.z_pupila, r_pupila=opts.r_pupila)
+                abbe = seno_abbe(
+                    sups, d_0, r_ap,
+                    semiangulo_deg=np.degrees(
+                        np.arctan(opts.r_pupila / abs(opts.z_pupila - d_0))))
+            except Exception as exc:
+                inkex.utils.errormsg(f"No se pudo analizar la imagen: {exc}")
+                resultados = None
+
+        if resultados and opts.dibujar_imagen:
+            # plano imagen paraxial, como referencia
+            plano = inkex.PathElement()
+            plano.style = {"stroke": "#999999", "stroke-width": "0.4pt",
+                           "fill": "none",
+                           "stroke-dasharray": f"{self._sv(1.5)},{self._sv(1)}"}
+            plano.path = inkex.Path(
+                f"M {x_img:.4f},{-self._Y(opts.h_campo * 1.25):.4f} "
+                f"L {x_img:.4f},{self._Y(opts.h_campo * 1.25):.4f}")
+            yield plano
+
+            # superficie imagen curva (ambas ramas)
+            for signo in (+1.0, -1.0):
+                pts = [(self._X(e['foco'][0]), signo * self._Y(e['foco'][1]))
+                       for e in resultados]
+                curva = inkex.PathElement()
+                curva.style = {
+                    "stroke": "#7b1fa2", "stroke-width": "0.6pt",
+                    "fill": "none",
+                    "stroke-dasharray": f"{self._sv(2)},{self._sv(1.2)}"}
+                curva.path = inkex.Path(puntos_a_bezier_path_str(
+                    pts, cerrar=False))
+                yield curva
+
+            # focos reales de cada punto de campo
+            for idx, h in enumerate(alturas):
+                cerc = min(resultados, key=lambda e: abs(e['h'] - h))
+                circ = inkex.Circle()
+                circ.set('cx', f"{self._X(cerc['foco'][0]):.4f}")
+                circ.set('cy', f"{self._Y(cerc['foco'][1]):.4f}")
+                circ.set('r', f"{self._sv(1.3):.4f}")
+                circ.style = {"fill": "none",
+                              "stroke": paleta[idx % len(paleta)],
+                              "stroke-width": "0.5pt"}
+                yield circ
+
+        # ── 9. Anotación numérica de la verificación ─────────────────────
+        if resultados and opts.anotar:
+            rhos = [alturas_estigmaticas(diseno, rho)
+                    for rho in np.linspace(r_ap * 0.15, r_ap * 0.95, 7)]
+            valores = [condicion_aplanatismo(diseno, par) for par in rhos]
+            rms = rms_aplanatismo(valores)
+            dz_max = max(abs(e['foco'][0] - d_2) for e in resultados)
+            spot_max = max(e['spot'] for e in resultados)
+            aplanatico = rms < 1e-9
+
+            lineas = [
+                (f"{'lente aplanática tipo ' + str(tipo) if not modo_libre else 'singlete estigmático (superficies libres)'}"
+                 f"   ·   n = {opts.n0:g}/{opts.n1:g}/{diseno['n'][2]:g}"),
+                (f"conjugados: d0 = {d_0:g}, "
+                 f"d1 = {'inf' if np.isinf(d_1) else format(d_1, '.6g')}, "
+                 f"d2 = {d_2:.6g}   ·   aumento M = {M_lat:+.4f}"),
+                (f"condición seno de Abbe: sin u0/sin uN = {abbe['media']:+.6f} "
+                 f"(dispersión {abbe['desviacion_rel']:.1e})"),
+                (f"(M − 1)_RMS = {rms:.3e}   ⇒   "
+                 f"{'APLANÁTICO en todo rigor' if aplanatico else 'NO aplanático'}"),
+                (f"spot meridional ≤ {spot_max * 1000:.2f} µm; "
+                 f"los focos se apartan del plano paraxial hasta {dz_max:.3f}"),
+            ]
+            y0 = self._Y(max(r_ap, opts.h_campo)) + self._sv(9.0)
+            for i, s in enumerate(lineas):
+                t = inkex.TextElement()
+                t.text = s
+                t.set("x", f"{x_obj:.4f}")
+                t.set("y", f"{y0 + i * self._sv(4.2):.4f}")
+                t.style = {
+                    "font-size": f"{self._sv(2.6):.4f}",
+                    "font-family": "sans-serif",
+                    "fill": "#7b1fa2" if i == 3 else "#333333",
+                }
+                yield t
 
 
 if __name__ == "__main__":

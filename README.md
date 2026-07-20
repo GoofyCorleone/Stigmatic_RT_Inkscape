@@ -375,14 +375,38 @@ thesis (Eqs. 78/92/93):
 | **Tipo-2** | flat-vertex ovoids (`Oₖ = 0`) | virtual | generalizes the plane-parallel plate; ophthalmic-style |
 | **Tipo-3** | `Gₖ = 0` ovoids | virtual | positive meniscus |
 
-You specify the refractive indices, the two vertices `ζ₀, ζ₁` and the object
-position `d₀`; the image position `d₂` is *determined* by the design and marked
-on the canvas (hollow circle when virtual). Types 1–3 require `n₂ = n₀`
-(enforced, per Eq. 112). An optional physical pupil (two beam-dump segments)
-can be drawn as in the thesis figures. The defaults reproduce the thesis
-examples exactly (object at 0, vertices at 60/70, `n₁ = 1.8` — Tables 6–9).
+### The extension's four tabs
 
-The mathematical core lives in `gots_util.py`:
+**Diseño** — pick the mode. In *Tipo* mode you give the refractive indices, the
+two vertices `ζ₀, ζ₁` and the object position `d₀`; the image position `d₂` is
+*derived* from the design, not entered, and is marked on the canvas (hollow
+circle when virtual). Types 1–3 force `n₂ = n₀` per Eq. 112 and warn if you
+entered something else. The defaults reproduce the thesis examples exactly
+(object at 0, vertices at 60/70, `n₁ = 1.8` — Tables 6–9).
+
+**Superficies libres (GOTS)** — the general mode: you enter the three conjugates
+`d₀, d₁, d₂` and the extension derives the GOTS shape parameters `(G, O, T, S)`
+of both surfaces with `calcular_gots`. The singlet is rigorously stigmatic for
+the axial pair but in general *not* aplanatic; the Análisis tab measures how far
+off it is. This is the mode for exploring your own designs and for reproducing
+sweeps like Fig. 16 of the thesis.
+
+**Apertura y Haz** — aperture (auto by default), physical pupil position and
+radius, ray count. The pupil is what makes the field points comparable: all of
+them cross the same opening, as in the thesis figures.
+
+**Análisis del aplanatismo** — number and height of the field points, and two
+switches that answer "where does the image actually form?":
+
+- *Dibujar superficie imagen y focos reales* traces each field fan, marks the
+  real meridional foci with hollow circles and joins them with a purple curve,
+  drawing the paraxial plane in grey for contrast.
+- *Anotar la verificación en el dibujo* writes the Abbe sine ratio, the
+  `(M − 1)_RMS` metric of Eq. 94, the meridional spot size and the departure
+  from the paraxial plane straight onto the canvas, with a plain
+  `APLANÁTICO en todo rigor` / `NO aplanático` verdict.
+
+### The mathematical core (`gots_util.py`)
 
 - `disenar_aplanatica(tipo, n0, n1, ζ0, ζ1, d0, ...)` — conjugates, GOTS
   parameters and lateral magnification for each type (validated against
@@ -392,16 +416,40 @@ The mathematical core lives in `gots_util.py`:
   degenerate limit (O=0, G=0 or ∞).
 - `factor_aplanatismo` / `condicion_aplanatismo` / `rms_aplanatismo` —
   Eqs. 78 and 94, for verifying `M = 1` (or optimizing approximate designs).
+- `trazar_rayo` — exact ray tracing through the analytic surfaces (chapter 3 of
+  the thesis), independent of the Bézier approximation. Its normals come from
+  the geometric property that defines `V̄C̄ₖ` (Eq. 90): the normal at any point
+  of a Cartesian surface crosses the axis at `Cₖ = ζₖ + V̄C̄ₖ`, so
+  `n̂ ∝ (q·(z − ζ) − 1, q·r)` with `q = 1/V̄C̄ₖ` — finite even for a plane.
+- `foco_meridional`, `superficie_imagen`, `seno_abbe` — best-crossing point of a
+  fan, the curved image surface, and the Abbe sine check on the axial pair.
 - `alturas_estigmaticas` — chains the exact stigmatic geometry to obtain the
   physical ray heights `ρ₀ → ρ₁` without a ray tracer.
 
-### The four types traced
+One subtlety the tracer has to get right: `intersectar` restricts the search to
+the useful cap (`ρ ≤ ρ(r_max)`). Without that bound a ray coming from the left
+hits the *far* side of a sphere, or the back branch of an ovoid, long before it
+reaches the designed surface — which silently produced wrong foci for types 0
+and 3 until it was fixed.
 
-`generar_ejemplos_aplanaticos.py` reproduces the thesis figures 21, 24, 27 and 30:
-each lens is traced with two object points — one on axis (blue, H = 0) and one
-off axis (orange, H = 8 mm) — through the canonical engine, over the *same*
-Bézier geometry the extension writes into the SVG. Dashed extensions mark the
-virtual image where the emerging rays only appear to come from.
+### Where the image actually forms
+
+`generar_ejemplos_aplanaticos.py` traces **four point sources** at different field
+heights through each lens, limited by a physical pupil, and locates the *real*
+meridional focus of every fan. The point to look at is not that the foci land on
+a plane — **they do not**:
+
+* each fan converges to a spot of a few microns, which is what aplanatism buys
+  you: no spherical aberration and no coma, guaranteed by the Abbe sine condition
+  annotated on every figure;
+* the locus of those foci is a **curved surface** (field curvature), drawn as a
+  purple dashed line and clearly separated from the paraxial image plane, which is
+  drawn in grey for reference. The thesis shows exactly this in Fig. 17 ("cuya
+  imagen se forma sobre una superficie curva") and discusses it on p. 101.
+
+Because that departure is only tenths of a millimetre at true scale, each figure
+carries an inset that magnifies the image region along `z` (×3 to ×122 depending
+on the type) so the curvature is visible.
 
 | | |
 |---|---|
@@ -412,19 +460,50 @@ The design conjugates come out exactly as tabulated in the thesis:
 `d₁ = 26.666667, d₂ = −8` (Table 6), `d₁ = ∞, d₂ = 130` (Table 7),
 `d₂ = 4.444444` (Table 8) and `d₁ = 41.481481, d₂ = −22.4` (Table 9).
 
+### A three-lens aplanatic system
+
+The aplanatism condition `M(N, ρₖ) = 1` is a **product over surfaces** (Eq. 78),
+so chaining rigorously aplanatic elements yields a rigorously aplanatic system.
+`ejemplo_aplanatica_3lentes.svg` chains three type-1 lenses into a 1:1 relay of
+six Cartesian surfaces — the real image of each lens is the object of the next:
+
+![Tres lentes](ejemplo_aplanatica_3lentes.svg)
+
+`(M − 1)_RMS` over the six surfaces is **4.9·10⁻¹⁶** and the sine ratio of the
+whole train is `−1.000000` constant to 4·10⁻¹⁵. A companion file
+`ejemplo_aplanatica_3lentes_inkscape.svg` carries the same geometry with the rays
+as `optics:beam` seeds, ready for **Extensions → Optics → Ray Tracing**; traced
+that way, all 36 beams land on the analytically predicted foci to within
+0.03–3.8 µm.
+
 ### Validation
 
-Through the **real extension pipeline** (`render.py`, 9-ray fans at ±6°) all four
-types converge at the designed image point to **≤ 6·10⁻⁵ mm** and satisfy the Abbe
-sine condition (`sin θ₀ / sin θ_N` constant) to ~10⁻⁶ relative deviation.
+The module traces its own designs exactly (`trazar_rayo`), independently of the
+Bézier approximation written to the SVG. Against that reference:
 
-In the figures above the on-axis fans converge to **< 1 µm** — rigorous stigmatism
-at a numerical aperture no paraxial design could hold. Off-axis, the rays still
-form a sharp meridional focus (spot ≤ 3 µm at best focus, i.e. no coma); measured
-against the *flat paraxial* image plane the residual is 14–420 µm, which is the
-field curvature, astigmatism and distortion the thesis itself reports (≈60 µm for
-the anastigmatic tipo-0 at full field, Fig. 22). Aplanatism removes spherical
-aberration and coma — not the remaining primary aberrations.
+| check | result |
+|---|---|
+| axial focus of all four types | exact to **< 1 nm**, spot **0 nm** — rigorous stigmatism |
+| Abbe sine ratio `sin u₀/sin u_N` | equals `(n_N/n₀)·M` to **10⁻¹⁶**, constant across the fan |
+| identity `sin u₀/sin u_N = (n_N/n₀)·M·M(ρₖ)` (Eqs. 77/86/87) | holds to **10⁻¹⁵** on aplanatic *and* non-aplanatic designs |
+| through the real `render.py` pipeline | foci to **≤ 6·10⁻⁵ mm**, sine ratio constant to ~10⁻⁶ |
+
+That last identity is the strongest check available: it ties `inversa_vc` (Eq. 92),
+`condicion_aplanatismo` (Eq. 78) and the exact tracer together, and it fails
+loudly if any of them is wrong.
+
+Off-axis, the meridional spot stays at 1–15 µm while the foci walk 0.1–3.8 mm away
+from the paraxial plane. That is the expected behaviour: aplanatism removes
+spherical aberration and coma, not astigmatism, field curvature or distortion. For
+the anastigmatic tipo-0 the residual matches the ≈60 µm the thesis reports at full
+field (Fig. 22).
+
+**A note on Table 5 of the thesis.** The free-surface mode reproduces surface 0 of
+Table 5 exactly (`G = −2.719771, O = 0.025006, T = −2.613020·10⁻⁸,
+S = −4.215636·10⁻⁵`) but not surface 1, because the table lists the final image at
+`d₂ = 200` while the surrounding text specifies `d₂ = 120 mm`. Sweeping `d₂` with
+`d₁ = 599.172082` fixed puts the minimum of `(M − 1)_RMS` at **d₂ ≈ 120.17**,
+confirming the text rather than the table.
 
 ---
 
